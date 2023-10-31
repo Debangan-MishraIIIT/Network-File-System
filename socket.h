@@ -8,4 +8,6 @@ struct pair server_establish_connection(int PORT);
 int send_file(char* filename, int sockfd);
 int receive_file(int sockfd);
 
+int joinNamingServer(char *ip, int port, char *joinas);
+
 #endif
