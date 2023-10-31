@@ -1,4 +1,4 @@
 Initial Commit
-Gaurav -- Working in Connection
-Deby -- Working in File Transfer
-Harsha -- LRU
+- Gaurav -- Working in Connection
+- Deby -- Working in File Transfer
+- Harsha -- LRU
