@@ -1,6 +1,6 @@
 #include "headers.h"
 
-int client_establish_connection()
+int client_establish_connection(int PORT, char* IP)
 {
     int sockfd, connfd;
     struct sockaddr_in servaddr, cli;
@@ -16,7 +16,7 @@ int client_establish_connection()
     bzero(&servaddr, sizeof(servaddr));
 
     servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    servaddr.sin_addr.s_addr = inet_addr(IP);
     servaddr.sin_port = htons(PORT);
 
     if (connect(sockfd, (SA *)&servaddr, sizeof(servaddr)) != 0)
@@ -29,7 +29,7 @@ int client_establish_connection()
     return sockfd;
 }
 
-struct pair server_establish_connection(){
+struct pair server_establish_connection(int PORT){
     int sockfd, connfd, len; 
 	struct sockaddr_in servaddr, cli; 
 
