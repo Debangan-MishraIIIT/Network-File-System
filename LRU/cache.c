@@ -1,7 +1,5 @@
 #include "headers.h"
 
-// replace data type of "data" with relevant/suitable data type.
-// In the case of NFS, we will be storing multiple data types like file path, IP of SS_x, port of SS_x, etc.
 typedef struct cacheCell
 {
     struct cacheCell *prev;
@@ -14,7 +12,6 @@ typedef struct cache
 {
     int numFiles;
     int maxFiles;
-    // bool *presentArray;
     cacheCell *front;
     cacheCell *rear;
 } cache;
@@ -36,15 +33,12 @@ cache *createCache(int size)
     cnew->rear = NULL;
     cnew->maxFiles = size;
     cnew->numFiles = 0;
-    // cnew->presentArray = (bool *)malloc(sizeof(bool) * cnew->maxFiles);
-    // for (int i = 0; i < cnew->maxFiles; i++)
-    //     cnew->presentArray[i] = false;
     return cnew;
 }
 
 bool isCacheFull(cache *c)
 {
-    return (c->maxFiles == c->numFiles);
+    return (c->numFiles == c->maxFiles);
 }
 
 bool isCacheEmpty(cache *c)
@@ -56,56 +50,92 @@ void printCache(cache *c)
 {
     if (!isCacheEmpty(c))
     {
-        cacheCell *temp = c->front->next;
+        cacheCell *temp = c->front;
         int i = 1;
-        while (temp != c->front)
+        do
         {
-            printf("%d ---- %d\t\t%d\n", i, temp->ip, temp->port);
+            printf("%d ---- %d\t%d\n", i, temp->ip, temp->port);
             i++;
             temp = temp->next;
-        }
+        } while (temp != c->front);
     }
     else
+    {
         printf("Cache is empty!\n");
+    }
 }
 
-void dequeueCell(cache *c)
+void removeFileFromCache(cache *c)
 {
     if (!isCacheEmpty(c))
     {
         if (c->front == c->rear)
+        {
+            free(c->front);
             c->front = NULL;
-        cacheCell *temp = c->rear;
-        c->rear = c->rear->prev;
-        if (c->rear != NULL)
+            c->rear = NULL;
+        }
+        else
+        {
+            cacheCell *temp = c->rear;
+            c->rear = c->rear->prev;
             c->rear->next = NULL;
-        free(temp);
+            free(temp);
+        }
         c->numFiles--;
     }
 }
 
-void enqueueCell(cache *c, int ip, int port)
+void addFileToCache(cache *c, int ip, int port)
 {
     if (isCacheFull(c))
-        dequeueCell(c);
+    {
+        removeFileFromCache(c);
+    }
 
     cacheCell *cnew = createCacheCell(ip, port);
-    cnew->next = c->front;
-    if (c->front != NULL)
+    if (isCacheEmpty(c))
     {
-        c->front->prev = cnew;
-    }
-    c->front = cnew;
-
-    if (c->rear == NULL)
-    {
+        c->front = cnew;
         c->rear = cnew;
+    }
+    else
+    {
+        cnew->next = c->front;
+        cnew->prev = c->rear;
+        c->rear->next = cnew;
+        cnew->next = c->front;
+        c->front->prev = cnew;
+        c->front = cnew;
     }
 
     c->numFiles++;
-    
 }
 
 int main()
 {
+    cache *c = createCache(3);
+
+    // printCache(c);
+
+    addFileToCache(c, 192, 80);
+    addFileToCache(c, 203, 443);
+    addFileToCache(c, 127, 8080);
+    printCache(c);
+    printf("\n\n\n");
+    addFileToCache(c, 169, 69);
+    printCache(c);
+    printf("\n\n\n");
+    addFileToCache(c, 156, 22);
+    printCache(c);
+    printf("\n\n\n");
+    addFileToCache(c, 127, 8080);
+    printCache(c);
+    printf("\n\n\n");
+
+    // printCache(c);
+
+    printf("lol\n");
+
+    return 0;
 }
