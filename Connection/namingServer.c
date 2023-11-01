@@ -1,27 +1,67 @@
 #include "headers.h"
 
 // TODO: to be modified to a more efficient (non restrictive) method of storage. Implementing simple array for now
-struct pair clientsList[100];
-struct pair serversList[100];
-int clientsCount = 0;
-int serversCount = 0;
+
+struct hostDetails storageServers[100];
+int storageServerCount = 0;
+
+pthread_t clientThreads[100];
+struct hostDetails clientDetails[100];
+int clientCount = 0;
+
+void *acceptClientRequests(void *args)
+{
+    struct hostDetails *cd = ((struct hostDetails *)(args));
+    char client_ip[16];
+    strcpy(client_ip, cd->ip);
+    int client_port = cd->port;
+    int connfd = cd->connfd;
+    printf("Accepting client requests from %s:%d\n", client_ip, client_port);
+
+    while (1)
+    {
+        // recieve the client request
+        char request[4096];
+        int bytesRecv = recv(connfd, request, sizeof(request), 0);
+        if (bytesRecv == -1)
+        {
+            perror("recv");
+        }
+
+        struct hostDetails ss = storageServers[atoi(request)];
+
+        // send storage server details
+        int bytesSent = send(connfd, &ss, sizeof(ss), 0);
+        if (bytesSent == -1)
+        {
+            perror("send");
+        }
+        printf("SS Details: %s:%d\n", storageServers[atoi(request)].ip, storageServers[atoi(request)].port);
+    }
+}
 
 void addClient(int connfd)
 {
     struct sockaddr_in cli_addr;
     socklen_t addrlen = sizeof(cli_addr);
 
+    char client_ip[16];
+    int client_port;
     if (getpeername(connfd, (struct sockaddr *)&cli_addr, &addrlen) == 0)
     {
-        char client_ip[16];
         inet_ntop(AF_INET, &cli_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
-        int client_port = ntohs(cli_addr.sin_port);
+        client_port = ntohs(cli_addr.sin_port);
         printf("Client connected from %s:%d\n", client_ip, client_port);
     }
     else
     {
         perror("getpeername");
     }
+    strcpy(clientDetails[clientCount].ip, client_ip);
+    clientDetails[clientCount].port = client_port;
+    clientDetails[clientCount].connfd = connfd;
+    clientCount++;
+    pthread_create(&clientThreads[clientCount - 1], NULL, acceptClientRequests, (void *)&clientDetails[clientCount - 1]);
 }
 
 void addStorageServer(int connfd)
@@ -29,17 +69,22 @@ void addStorageServer(int connfd)
     struct sockaddr_in ss_addr;
     socklen_t addrlen = sizeof(ss_addr);
 
+    char ss_ip[16];
+    int ss_port;
     if (getpeername(connfd, (struct sockaddr *)&ss_addr, &addrlen) == 0)
     {
-        char ss_ip[16];
         inet_ntop(AF_INET, &ss_addr.sin_addr, ss_ip, INET_ADDRSTRLEN);
-        int client_port = ntohs(ss_addr.sin_port);
-        printf("Storage Server connected from %s:%d\n", ss_ip, client_port);
+        ss_port = ntohs(ss_addr.sin_port);
+        printf("Storage Server connected from %s:%d\n", ss_ip, ss_port);
     }
     else
     {
         perror("getpeername");
     }
+    strcpy(storageServers[storageServerCount].ip, ss_ip);
+    storageServers[storageServerCount].port = ss_port;
+    storageServers[storageServerCount].connfd = connfd;
+    storageServerCount++;
 }
 
 void *acceptHost(void *args)
@@ -121,6 +166,10 @@ int main()
 
     // accpeting server and clinet are infine loops and continue till naming server terminated
     pthread_join(acceptHostThread, NULL);
+    for (int i = 0; i < clientCount; i++)
+    {
+        pthread_join(clientThreads[i], NULL);
+    }
 
     return 0;
 }

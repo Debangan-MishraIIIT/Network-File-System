@@ -26,4 +26,11 @@ struct pair
     int first, second;
 };
 
+struct hostDetails
+{
+    char ip[16];
+    int port;
+    int connfd;
+};
+
 #endif

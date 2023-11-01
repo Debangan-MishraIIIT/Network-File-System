@@ -4,6 +4,9 @@ int main()
 {
 	int namingServerPort = 6969;
 	int sockfd = joinNamingServer("127.0.0.1", namingServerPort, "Storage Server");
+	while(1){
+		
+	}
 	return 0;
 }
 
