@@ -31,7 +31,8 @@ int client_establish_connection(int PORT, char *IP)
 
 struct pair server_establish_connection(int PORT)
 {
-    int sockfd, connfd, len;
+    int sockfd, connfd;
+    socklen_t len;
     struct sockaddr_in servaddr, cli;
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -66,6 +67,7 @@ struct pair server_establish_connection(int PORT)
     len = sizeof(cli);
 
     connfd = accept(sockfd, (SA *)&cli, &len);
+
     if (connfd < 0)
     {
         perror("accept");

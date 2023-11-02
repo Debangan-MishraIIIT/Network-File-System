@@ -25,7 +25,8 @@ void *acceptClientRequests(void *args)
         int bytesRecv = recv(connfd, request, sizeof(request), 0);
         if (bytesRecv == -1)
         {
-            perror("recv");
+            // perror("recv");
+            break;
         }
 
         struct hostDetails ss = storageServers[atoi(request)];
@@ -36,8 +37,9 @@ void *acceptClientRequests(void *args)
         {
             perror("send");
         }
-        printf("SS Details: %s:%d\n", storageServers[atoi(request)].ip, storageServers[atoi(request)].port);
+        // printf("SS Details: %s:%d\n", storageServers[atoi(request)].ip, storageServers[atoi(request)].port);
     }
+    return NULL;
 }
 
 void addClient(int connfd)
@@ -85,6 +87,7 @@ void addStorageServer(int connfd)
     storageServers[storageServerCount].port = ss_port;
     storageServers[storageServerCount].connfd = connfd;
     storageServerCount++;
+    // TODO: add storage server disconnection message
 }
 
 void *acceptHost(void *args)
@@ -97,10 +100,10 @@ void *acceptHost(void *args)
         printf("Error\n");
 
     struct sockaddr_in cli;
-    int len = sizeof(cli);
+    socklen_t len = sizeof(cli);
     while (1)
     {
-        int connfd = accept(sockfd, &cli, &len);
+        int connfd = accept(sockfd, (struct sockaddr *)&cli, &len);
         if (connfd < 0)
         {
             perror("accept");

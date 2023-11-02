@@ -7,10 +7,20 @@ client:
 	./client
 	rm client
 
+client%:
+	gcc client.c socket_functionality.c -o $@
+	./$@
+	rm $@
+
 storageServer:
 	gcc storageServer.c socket_functionality.c -o storageServer
 	./storageServer
 	rm storageServer
+
+storageServer%: 
+	gcc storageServer.c socket_functionality.c -o $@
+	./$@
+	rm $@
 
 namingServer:
 	gcc namingServer.c socket_functionality.c -o namingServer
