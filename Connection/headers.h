@@ -33,4 +33,17 @@ struct hostDetails
     int connfd;
 };
 
+struct clientDetails
+{
+    int connfd;
+};
+
+struct ssDetails
+{
+    char ip[16];
+    int nmPort;
+    int cliPort;
+    int connfd;
+};
+
 #endif
