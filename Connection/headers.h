@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -33,7 +34,7 @@ struct hostDetails
     int connfd;
 };
 
-struct clientDetails
+struct cDetails
 {
     int connfd;
 };
@@ -44,6 +45,11 @@ struct ssDetails
     int nmPort;
     int cliPort;
     int connfd;
+};
+
+struct accessibleFile{
+    char * path;
+    char perms[11];
 };
 
 #endif

@@ -114,32 +114,17 @@ int main()
 		{
 			break;
 		}
-		// printf(".%ld.%s.\n", strlen(input), input);
 
 		if (input[strlen(input) - 1] == '\n')
 		{
 			input[strlen(input) - 1] = '\0'; // removing the \n char
 		}
 
-		// printf(".%ld.%s.\n", strlen(input), input);
+		printf(".%ld.%s.\n", strlen(input), input);
 
-		sendRequest(input, sockfd);
-	// 	int bytesSent = send(sockfd, input, sizeof(input), 0);
-	// if (bytesSent == -1)
-	// {
-	// 	perror("send");
-	// }
-	// printf("here");
-		
+
 		free(input);
 	}
 
 	return 0;
 }
-
-// int main()
-// {
-// 	int sockfd= client_establish_connection(8080, "127.0.0.1");
-// 	send_file("file.txt", sockfd);
-// 	close(sockfd);
-// }

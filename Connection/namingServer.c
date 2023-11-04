@@ -4,10 +4,11 @@
 
 struct ssDetails storageServers[100];
 int storageServerCount = 0;
+struct cDetails clientDetails[100];
 
 struct record
 {
-    char path[4096];
+    struct accessibleFile file;
     struct ssDetails storageServer;
 };
 struct record records[100]; // need to change
@@ -40,12 +41,12 @@ void sendRequestToSS(struct ssDetails *ss, char *request)
 
 void *acceptClientRequests(void *args)
 {
-    int connfd = *((int *)args);
+    struct cDetails *cli = (struct cDetails *)args;
     while (1)
     {
         // recieve the client request
         char request[4096];
-        int bytesRecv = recv(connfd, request, sizeof(request), 0);
+        int bytesRecv = recv(cli->connfd, request, sizeof(request), 0);
         if (bytesRecv == -1)
         {
             // perror("recv");
@@ -59,14 +60,14 @@ void *acceptClientRequests(void *args)
         sendRequestToSS(ss, request);
 
         // send storage server details
-        int bytesSent = send(connfd, ss, sizeof(struct ssDetails), 0);
+        int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
         if (bytesSent == -1)
         {
             perror("send");
         }
 
         char buffer[4096];
-        bytesRecv = recv(connfd, buffer, sizeof(buffer), 0);
+        bytesRecv = recv(cli->connfd, buffer, sizeof(buffer), 0);
         if (bytesRecv == -1)
         {
             perror("recv");
@@ -83,9 +84,14 @@ void *acceptClientRequests(void *args)
 
 void addClient(int connfd)
 {
+    clientDetails[clientCount].connfd = connfd;
     clientCount++;
-    printf("Client Joined\n");
-    pthread_create(&clientThreads[clientCount - 1], NULL, acceptClientRequests, (void *)&connfd);
+    printf("Client Joined\n")
+
+    pthread_create(&clientThreads[clientCount - 1], NULL, acceptClientRequests, &clientDetails[clientCount - 1]);
+}
+void *addPathFromSS(void *args){
+    
 }
 
 void addStorageServer(int connfd)
@@ -99,6 +105,9 @@ void addStorageServer(int connfd)
     storageServers[storageServerCount].connfd = connfd;
     storageServerCount++;
     printf("SS Joined %s:%d %d\n", storageServers[storageServerCount - 1].ip, storageServers[storageServerCount - 1].cliPort, storageServers[storageServerCount - 1].nmPort);
+
+    pthread_t addpathThread;
+    pthread_create(&addpathThread, NULL, addPathFromSS, (void*)&storageServers[storageServerCount-1]);
     // TODO: add storage server disconnection message
 }
 
