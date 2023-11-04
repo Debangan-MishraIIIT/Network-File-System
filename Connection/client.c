@@ -25,14 +25,19 @@ int joinSS(struct ssDetails ss)
 	return sockfd;
 }
 
-void sendRequest(char *request, int sockfd)
+void sendRequest(char *input, int sockfd)
 {
 	// send request
-	int bytesSent = send(sockfd, request, sizeof(request), 0);
+	char request[4096];
+	strcpy(request, input);
+	// printf("req: %s\nin: %s\n", request, input);
+	// printf(".%d,%d,\n", strlen(request), strlen(input));
+	int bytesSent = send(sockfd, request, strlen(request), 0);
 	if (bytesSent == -1)
 	{
 		perror("send");
 	}
+	// printf("here");
 	// recieve the storage server details
 	struct ssDetails ss;
 	int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
@@ -80,7 +85,19 @@ int joinNamingServerAsClient(char *ip, int port)
 	{
 		perror("send");
 	}
+	
+	char buffer[4096];
+	int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
+	if (bytesRecv == -1)
+	{
+		perror("recv");
+	}
+	if (strcmp(buffer, "ACCEPTED JOIN")!=  0)
+	{
+		return -1;
+	}
 	printf("Client connected to naming server.\n");
+
 
 	return sockfd;
 }
@@ -91,14 +108,29 @@ int main()
 	int sockfd = joinNamingServerAsClient("127.0.0.1", namingServerPort);
 	while (1)
 	{
+		// char input[4096];
 		char *input = malloc(sizeof(char) * 4096);
 		if (fgets(input, 4096, stdin) == NULL)
 		{
 			break;
 		}
-		// printf("%s", input);
-		input[strlen(input) - 1] = '\0'; // removing the \n char
+		// printf(".%ld.%s.\n", strlen(input), input);
+
+		if (input[strlen(input) - 1] == '\n')
+		{
+			input[strlen(input) - 1] = '\0'; // removing the \n char
+		}
+
+		// printf(".%ld.%s.\n", strlen(input), input);
+
 		sendRequest(input, sockfd);
+	// 	int bytesSent = send(sockfd, input, sizeof(input), 0);
+	// if (bytesSent == -1)
+	// {
+	// 	perror("send");
+	// }
+	// printf("here");
+		
 		free(input);
 	}
 

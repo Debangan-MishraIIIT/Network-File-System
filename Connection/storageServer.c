@@ -87,6 +87,16 @@ int initializeNMConnection(char *ip, int port, int nmPort, int cliPort)
 	{
 		perror("send");
 	}
+	char buffer[4096];
+	int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
+	if (bytesRecv == -1)
+	{
+		perror("recv");
+	}
+	if (strcmp(buffer, "ACCEPTED JOIN") != 0)
+	{
+		return -1;
+	}
 	printf("SS connected to naming server.\n");
 
 	// initialize detials

@@ -5,7 +5,8 @@
 struct ssDetails storageServers[100];
 int storageServerCount = 0;
 
-struct record{
+struct record
+{
     char path[4096];
     struct ssDetails storageServer;
 };
@@ -16,7 +17,8 @@ pthread_t clientThreads[100];
 // struct hostDetails clientDetails[100];
 int clientCount = 0;
 
-struct ssDetails* getSSfromPath(char * path){
+struct ssDetails *getSSfromPath(char *path)
+{
     for (int i = 0; i < recordCount; i++)
     {
         if (strcmp(records[i].path, path) == 0)
@@ -27,7 +29,7 @@ struct ssDetails* getSSfromPath(char * path){
     return NULL;
 }
 
-void sendRequestToSS(struct ssDetails* ss, char *request)
+void sendRequestToSS(struct ssDetails *ss, char *request)
 {
     int bytesSent = send(ss->connfd, request, sizeof(request), 0);
     if (bytesSent == -1)
@@ -50,7 +52,7 @@ void *acceptClientRequests(void *args)
             break;
         }
         printf("Recieved from client - \'%s\'\n", request);
-        struct ssDetails* ss = &storageServers[atoi(request)];
+        struct ssDetails *ss = &storageServers[atoi(request)];
         // struct ssDetails* ss = getSSfromPath(request);
 
         printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
@@ -62,6 +64,18 @@ void *acceptClientRequests(void *args)
         {
             perror("send");
         }
+
+        char buffer[4096];
+        bytesRecv = recv(connfd, buffer, sizeof(buffer), 0);
+        if (bytesRecv == -1)
+        {
+            perror("recv");
+        }
+        if (strcmp(buffer, "ACCEPTED JOIN") != 0)
+        {
+            return NULL;
+        }
+
         printf("sent ss detials to client\n");
     }
     return NULL;
@@ -84,7 +98,7 @@ void addStorageServer(int connfd)
     }
     storageServers[storageServerCount].connfd = connfd;
     storageServerCount++;
-    printf("SS Joined %s:%d %d\n", storageServers[storageServerCount-1].ip,  storageServers[storageServerCount-1].cliPort,  storageServers[storageServerCount-1].nmPort);
+    printf("SS Joined %s:%d %d\n", storageServers[storageServerCount - 1].ip, storageServers[storageServerCount - 1].cliPort, storageServers[storageServerCount - 1].nmPort);
     // TODO: add storage server disconnection message
 }
 
@@ -113,6 +127,14 @@ void *acceptHost(void *args)
         {
             perror("recv");
         }
+
+        char joinAcceptedMsg[100] = "ACCEPTED JOIN";
+        int bytesSent = send(connfd, joinAcceptedMsg, sizeof(joinAcceptedMsg), 0);
+        if (bytesSent == -1)
+        {
+            perror("send");
+        }
+
         if (strcmp(buffer, "JOIN_AS Storage Server") == 0)
         {
             addStorageServer(connfd);
