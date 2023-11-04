@@ -2,91 +2,112 @@
 
 // TODO: to be modified to a more efficient (non restrictive) method of storage. Implementing simple array for now
 
-struct hostDetails storageServers[100];
+struct ssDetails storageServers[100];
 int storageServerCount = 0;
+struct cDetails clientDetails[100];
+
+struct record
+{
+    struct accessibleFile file;
+    struct ssDetails storageServer;
+};
+struct record records[100]; // need to change
+int recordCount = 0;
 
 pthread_t clientThreads[100];
-struct hostDetails clientDetails[100];
+// struct hostDetails clientDetails[100];
 int clientCount = 0;
+
+struct ssDetails *getSSfromPath(char *path)
+{
+    for (int i = 0; i < recordCount; i++)
+    {
+        if (strcmp(records[i].path, path) == 0)
+        {
+            return &records[i].storageServer;
+        }
+    }
+    return NULL;
+}
+
+void sendRequestToSS(struct ssDetails *ss, char *request)
+{
+    int bytesSent = send(ss->connfd, request, sizeof(request), 0);
+    if (bytesSent == -1)
+    {
+        perror("send");
+    }
+}
 
 void *acceptClientRequests(void *args)
 {
-    struct hostDetails *cd = ((struct hostDetails *)(args));
-    char client_ip[16];
-    strcpy(client_ip, cd->ip);
-    int client_port = cd->port;
-    int connfd = cd->connfd;
-    printf("Accepting client requests from %s:%d\n", client_ip, client_port);
-
+    struct cDetails *cli = (struct cDetails *)args;
     while (1)
     {
         // recieve the client request
         char request[4096];
-        int bytesRecv = recv(connfd, request, sizeof(request), 0);
+        int bytesRecv = recv(cli->connfd, request, sizeof(request), 0);
         if (bytesRecv == -1)
         {
             // perror("recv");
             break;
         }
+        printf("Recieved from client - \'%s\'\n", request);
+        struct ssDetails *ss = &storageServers[atoi(request)];
+        // struct ssDetails* ss = getSSfromPath(request);
 
-        struct hostDetails ss = storageServers[atoi(request)];
+        printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
+        sendRequestToSS(ss, request);
 
         // send storage server details
-        int bytesSent = send(connfd, &ss, sizeof(ss), 0);
+        int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
         if (bytesSent == -1)
         {
             perror("send");
         }
-        // printf("SS Details: %s:%d\n", storageServers[atoi(request)].ip, storageServers[atoi(request)].port);
+
+        char buffer[4096];
+        bytesRecv = recv(cli->connfd, buffer, sizeof(buffer), 0);
+        if (bytesRecv == -1)
+        {
+            perror("recv");
+        }
+        if (strcmp(buffer, "ACCEPTED JOIN") != 0)
+        {
+            return NULL;
+        }
+
+        printf("sent ss detials to client\n");
     }
     return NULL;
 }
 
 void addClient(int connfd)
 {
-    struct sockaddr_in cli_addr;
-    socklen_t addrlen = sizeof(cli_addr);
-
-    char client_ip[16];
-    int client_port;
-    if (getpeername(connfd, (struct sockaddr *)&cli_addr, &addrlen) == 0)
-    {
-        inet_ntop(AF_INET, &cli_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
-        client_port = ntohs(cli_addr.sin_port);
-        printf("Client connected from %s:%d\n", client_ip, client_port);
-    }
-    else
-    {
-        perror("getpeername");
-    }
-    strcpy(clientDetails[clientCount].ip, client_ip);
-    clientDetails[clientCount].port = client_port;
     clientDetails[clientCount].connfd = connfd;
     clientCount++;
-    pthread_create(&clientThreads[clientCount - 1], NULL, acceptClientRequests, (void *)&clientDetails[clientCount - 1]);
+    printf("Client Joined\n")
+
+    pthread_create(&clientThreads[clientCount - 1], NULL, acceptClientRequests, &clientDetails[clientCount - 1]);
+}
+void *addPathFromSS(void *args){
+    
 }
 
 void addStorageServer(int connfd)
 {
-    struct sockaddr_in ss_addr;
-    socklen_t addrlen = sizeof(ss_addr);
-
-    char ss_ip[16];
-    int ss_port;
-    if (getpeername(connfd, (struct sockaddr *)&ss_addr, &addrlen) == 0)
+    int bytesRecv = recv(connfd, &storageServers[storageServerCount], sizeof(storageServers[storageServerCount]), 0);
+    if (bytesRecv == -1)
     {
-        inet_ntop(AF_INET, &ss_addr.sin_addr, ss_ip, INET_ADDRSTRLEN);
-        ss_port = ntohs(ss_addr.sin_port);
-        printf("Storage Server connected from %s:%d\n", ss_ip, ss_port);
+        perror("recv");
+        return;
     }
-    else
-    {
-        perror("getpeername");
-    }
-    strcpy(storageServers[storageServerCount].ip, ss_ip);
-    storageServers[storageServerCount].port = ss_port;
     storageServers[storageServerCount].connfd = connfd;
     storageServerCount++;
+    printf("SS Joined %s:%d %d\n", storageServers[storageServerCount - 1].ip, storageServers[storageServerCount - 1].cliPort, storageServers[storageServerCount - 1].nmPort);
+
+    pthread_t addpathThread;
+    pthread_create(&addpathThread, NULL, addPathFromSS, (void*)&storageServers[storageServerCount-1]);
     // TODO: add storage server disconnection message
 }
 
@@ -94,8 +115,8 @@ void *acceptHost(void *args)
 {
     int sockfd = *((int *)args);
     // need to change limit
-    if (listen(sockfd, 128) == 0)
-        printf("Listening\n");
+    if (listen(sockfd, 12) == 0)
+        printf("Listening...\n");
     else
         printf("Error\n");
 
@@ -114,6 +135,13 @@ void *acceptHost(void *args)
         if (bytesRecv == -1)
         {
             perror("recv");
+        }
+
+        char joinAcceptedMsg[100] = "ACCEPTED JOIN";
+        int bytesSent = send(connfd, joinAcceptedMsg, sizeof(joinAcceptedMsg), 0);
+        if (bytesSent == -1)
+        {
+            perror("send");
         }
 
         if (strcmp(buffer, "JOIN_AS Storage Server") == 0)
@@ -140,8 +168,6 @@ int initializeNamingServer(int port)
         perror("socket");
         exit(0);
     }
-    else
-        printf("Socket successfully created..\n");
     bzero(&servaddr, sizeof(servaddr));
 
     servaddr.sin_family = AF_INET;
@@ -153,8 +179,6 @@ int initializeNamingServer(int port)
         perror("bind");
         exit(0);
     }
-    else
-        printf("Socket successfully binded..\n");
 
     return sockfd;
 }
@@ -162,10 +186,10 @@ int initializeNamingServer(int port)
 int main()
 {
     int port = 6969;
-    int sockfd = initializeNamingServer(port);
+    int nmSock = initializeNamingServer(port);
 
     pthread_t acceptHostThread;
-    pthread_create(&acceptHostThread, NULL, acceptHost, &sockfd);
+    pthread_create(&acceptHostThread, NULL, acceptHost, &nmSock);
 
     // accpeting server and clinet are infine loops and continue till naming server terminated
     pthread_join(acceptHostThread, NULL);

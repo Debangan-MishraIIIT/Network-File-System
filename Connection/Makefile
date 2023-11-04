@@ -3,27 +3,27 @@ rules:
 	gcc server.c socket_functionality.c -o server
 
 client:
-	gcc client.c socket_functionality.c -o client
+	gcc client.c socket_functionality.c -o client -pthread
 	./client
 	rm client
 
 client%:
-	gcc client.c socket_functionality.c -o $@
+	gcc client.c socket_functionality.c -o $@ -pthread
 	./$@
 	rm $@
 
 storageServer:
-	gcc storageServer.c socket_functionality.c -o storageServer
+	gcc storageServer.c socket_functionality.c -o storageServer -pthread
 	./storageServer
 	rm storageServer
 
 storageServer%: 
-	gcc storageServer.c socket_functionality.c -o $@
+	gcc storageServer.c socket_functionality.c -o $@ -pthread
 	./$@
 	rm $@
 
 namingServer:
-	gcc namingServer.c socket_functionality.c -o namingServer
+	gcc namingServer.c socket_functionality.c -o namingServer -pthread
 	./namingServer
 	rm namingServer
 

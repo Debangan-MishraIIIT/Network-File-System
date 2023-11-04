@@ -34,4 +34,22 @@ struct hostDetails
     int connfd;
 };
 
+struct cDetails
+{
+    int connfd;
+};
+
+struct ssDetails
+{
+    char ip[16];
+    int nmPort;
+    int cliPort;
+    int connfd;
+};
+
+struct accessibleFile{
+    char * path;
+    char perms[11];
+};
+
 #endif
