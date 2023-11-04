@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.html": "html",
+        "stat.h": "c",
+        "types.h": "c"
+    }
+}

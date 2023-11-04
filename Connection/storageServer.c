@@ -1,4 +1,62 @@
 #include "headers.h"
+// there should be an inifinite thread in the NS side that also checks and updates the paths
+
+int check_path_exists(const char *directoryPath)
+{
+	struct stat dirStat;
+	if (stat(directoryPath, &dirStat) == 0)
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+void convertPermissions(mode_t st_mode, char *perms) {
+    perms[0] = (S_ISDIR(st_mode)) ? 'd' : '-';
+    perms[1] = (st_mode & S_IRUSR) ? 'r' : '-';
+    perms[2] = (st_mode & S_IWUSR) ? 'w' : '-';
+    perms[3] = (st_mode & S_IXUSR) ? 'x' : '-';
+    perms[4] = (st_mode & S_IRGRP) ? 'r' : '-';
+    perms[5] = (st_mode & S_IWGRP) ? 'w' : '-';
+    perms[6] = (st_mode & S_IXGRP) ? 'x' : '-';
+    perms[7] = (st_mode & S_IROTH) ? 'r' : '-';
+    perms[8] = (st_mode & S_IWOTH) ? 'w' : '-';
+    perms[9] = (st_mode & S_IXOTH) ? 'x' : '-';
+    perms[10] = '\0'; // Null-terminate the string
+}
+
+void *take_inputs_dynamically(void *args)
+{
+	while (1)
+	{
+		char *path;
+		path = malloc(sizeof(char) * 250);
+		scanf("%s", path);
+		if (check_path_exists(path))
+		{
+			struct stat dirStat;
+			printf("path exists\n");
+			int r = stat(path, &dirStat);
+			if (r == -1)
+			{
+				fprintf(stderr, "File error\n");
+				exit(1);
+			}
+			char perms[11];
+			convertPermissions(dirStat.st_mode, perms);
+			printf("Permission bits: %s\n", perms);
+			// send path to NS
+		}
+		else
+		{
+			printf("path does not exist\n");
+		}
+	}
+	return NULL;
+}
 
 int check_path_exists(const char *directoryPath)
 {
@@ -227,7 +285,7 @@ int main()
 	pthread_join(inputThread, NULL);
 	pthread_join(nmThread, NULL);
 	pthread_join(clientsThread, NULL);
-
+  
 	return 0;
 }
 
