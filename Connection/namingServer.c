@@ -5,13 +5,31 @@
 struct ssDetails storageServers[100];
 int storageServerCount = 0;
 
+struct record{
+    char path[4096];
+    struct ssDetails storageServer;
+};
+struct record records[100]; // need to change
+int recordCount = 0;
+
 pthread_t clientThreads[100];
 // struct hostDetails clientDetails[100];
 int clientCount = 0;
 
-void sendRequestToSS(struct ssDetails ss, char *request)
+struct ssDetails* getSSfromPath(char * path){
+    for (int i = 0; i < recordCount; i++)
+    {
+        if (strcmp(records[i].path, path) == 0)
+        {
+            return &records[i].storageServer;
+        }
+    }
+    return NULL;
+}
+
+void sendRequestToSS(struct ssDetails* ss, char *request)
 {
-    int bytesSent = send(ss.connfd, request, sizeof(request), 0);
+    int bytesSent = send(ss->connfd, request, sizeof(request), 0);
     if (bytesSent == -1)
     {
         perror("send");
@@ -32,12 +50,14 @@ void *acceptClientRequests(void *args)
             break;
         }
         printf("Recieved from client - \'%s\'\n", request);
-        struct ssDetails ss = storageServers[atoi(request)];
-        printf("SS Details: %s:%d\n", storageServers[atoi(request)].ip, storageServers[atoi(request)].cliPort);
+        struct ssDetails* ss = &storageServers[atoi(request)];
+        // struct ssDetails* ss = getSSfromPath(request);
+
+        printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
         sendRequestToSS(ss, request);
 
         // send storage server details
-        int bytesSent = send(connfd, &ss, sizeof(ss), 0);
+        int bytesSent = send(connfd, ss, sizeof(struct ssDetails), 0);
         if (bytesSent == -1)
         {
             perror("send");

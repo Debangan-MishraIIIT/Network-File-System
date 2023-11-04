@@ -16,8 +16,35 @@ void *serveNM_Requests(void *args)
 	return NULL;
 }
 
-void *serveClient_Requests(void *args)
+void *serveClient_Request(void *args)
 {
+	int connfd = *((int *)args);
+	char buffer[4096];
+	int bytesRecv = recv(connfd, buffer, sizeof(buffer), 0);
+	if (bytesRecv == -1)
+	{
+		perror("recv");
+	}
+	printf("Recieved from client: %s\n", buffer);
+	return NULL;
+}
+
+void *acceptClients(void *args)
+{
+	int sockfd = *((int *)args);
+	struct sockaddr_in cli;
+	socklen_t len = sizeof(cli);
+	while (1)
+	{
+		int connfd = accept(sockfd, (struct sockaddr *)&cli, &len);
+		if (connfd < 0)
+		{
+			perror("accept");
+			exit(EXIT_FAILURE);
+		}
+		pthread_t serveClientThread;
+		pthread_create(&serveClientThread, NULL, serveClient_Request, &connfd);
+	}
 	return NULL;
 }
 
@@ -106,6 +133,9 @@ int initialzeClientsConnection(int port)
 		perror("bind");
 		exit(0);
 	}
+	if (listen(sockfd, 12) != 0)
+		perror("listen");
+
 	return sockfd;
 }
 
@@ -113,11 +143,16 @@ int main()
 {
 	int nmPort = 6970;
 	int cliPort = 6971;
-	initialzeClientsConnection(cliPort);
-	int sockfd = initializeNMConnection("127.0.0.1", 6969, nmPort, cliPort);
-	pthread_t nmThread;
-	pthread_create(&nmThread, NULL, serveNM_Requests, (void *)&sockfd);
+	int cliSock = initialzeClientsConnection(cliPort);
+	int nmSock = initializeNMConnection("127.0.0.1", 6969, nmPort, cliPort);
+
+	pthread_t nmThread, clientsThread;
+	pthread_create(&nmThread, NULL, serveNM_Requests, (void *)&nmSock);
+	pthread_create(&clientsThread, NULL, acceptClients, (void *)&cliSock);
+
 	pthread_join(nmThread, NULL);
+	pthread_join(clientsThread, NULL);
+
 	return 0;
 }
 
