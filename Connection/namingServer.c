@@ -32,11 +32,23 @@ struct ssDetails *getSSfromPath(char *path)
 
 void sendRequestToSS(struct ssDetails *ss, char *request)
 {
-    int bytesSent = send(ss->connfd, request, sizeof(request), 0);
+    int bytesSent = send(ss->connfd, request, strlen(request), 0);
     if (bytesSent == -1)
     {
         perror("send");
     }
+}
+
+int get_naming_server_index(char request[])
+{
+    return request[0] - '0';
+}
+
+int is_privileged_operation(char request[]){
+    if(strcmp(request, "MKDIR")==0 || strcmp(request, "RMFIL")==0 || strcmp(request, "MKFIL")==0){
+        return 1;
+    }
+    return 0;
 }
 
 void *acceptClientRequests(void *args)
@@ -54,20 +66,44 @@ void *acceptClientRequests(void *args)
             break;
         }
         printf("Recieved from client - \'%s\'\n", request);
-        struct ssDetails *ss = &storageServers[atoi(request)];
+        // if request is to create or delete a directory, ns handles it
+        // otherwise it is dealt directly
+        char actual_request[4096];
+        get_request(request, actual_request);
+
+        int naming_server_index = get_naming_server_index(request);
+        if (naming_server_index == -1)
+        {
+            printf("Invalid Address\n");
+        }
+        
+        struct ssDetails *ss = &storageServers[naming_server_index];
         // struct ssDetails* ss = getSSfromPath(request);
 
-        printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
-        sendRequestToSS(ss, request);
-
-        // send storage server details
-        int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
-        if (bytesSent == -1)
+        if (is_privileged_operation(actual_request))
         {
-            perror("send");
+            printf("Will be executed by Naming Server\n");
+            sendRequestToSS(ss, request);
+            char buf[1000];
+            recv(ss->connfd, buf, sizeof(buf), 0);
+            printf("%s\n", buf);
+            bzero(buf, sizeof(buf));
         }
+        else
+        {
+            printf("Will be executed by Client\n");
+            printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
+            sendRequestToSS(ss, request);
 
-        printf("sent ss detials to client\n");
+            // send storage server details
+            int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
+            if (bytesSent == -1)
+            {
+                perror("send");
+            }
+
+            printf("sent ss detials to client\n");
+        }
     }
     return NULL;
 }
@@ -80,8 +116,8 @@ void addClient(int connfd)
 
     pthread_create(&clientThreads[clientCount - 1], NULL, acceptClientRequests, &clientDetails[clientCount - 1]);
 }
-void *addPathFromSS(void *args){
-    
+void *addPathFromSS(void *args)
+{
 }
 
 void addStorageServer(int connfd)
@@ -97,7 +133,7 @@ void addStorageServer(int connfd)
     printf("SS Joined %s:%d %d\n", storageServers[storageServerCount - 1].ip, storageServers[storageServerCount - 1].cliPort, storageServers[storageServerCount - 1].nmPort);
 
     pthread_t addpathThread;
-    pthread_create(&addpathThread, NULL, addPathFromSS, (void*)&storageServers[storageServerCount-1]);
+    pthread_create(&addpathThread, NULL, addPathFromSS, (void *)&storageServers[storageServerCount - 1]);
     // TODO: add storage server disconnection message
 }
 

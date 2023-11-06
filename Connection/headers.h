@@ -13,14 +13,16 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
-
+#include <dirent.h>
 #include <semaphore.h>
 #include <pthread.h>
 
 #include "socket.h"
+#include "api.h"
 
 #define SA struct sockaddr
 #define MAX_SIZE 1024
+#define maxlen 1000
 
 struct pair
 {
@@ -47,8 +49,9 @@ struct ssDetails
     int connfd;
 };
 
-struct accessibleFile{
-    char * path;
+struct accessibleFile
+{
+    char *path;
     char perms[11];
 };
 

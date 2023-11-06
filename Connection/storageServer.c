@@ -1,31 +1,19 @@
 #include "headers.h"
 // there should be an inifinite thread in the NS side that also checks and updates the paths
 
-int check_path_exists(const char *directoryPath)
+void convertPermissions(mode_t st_mode, char *perms)
 {
-	struct stat dirStat;
-	if (stat(directoryPath, &dirStat) == 0)
-	{
-		return 1;
-	}
-	else
-	{
-		return 0;
-	}
-}
-
-void convertPermissions(mode_t st_mode, char *perms) {
-    perms[0] = (S_ISDIR(st_mode)) ? 'd' : '-';
-    perms[1] = (st_mode & S_IRUSR) ? 'r' : '-';
-    perms[2] = (st_mode & S_IWUSR) ? 'w' : '-';
-    perms[3] = (st_mode & S_IXUSR) ? 'x' : '-';
-    perms[4] = (st_mode & S_IRGRP) ? 'r' : '-';
-    perms[5] = (st_mode & S_IWGRP) ? 'w' : '-';
-    perms[6] = (st_mode & S_IXGRP) ? 'x' : '-';
-    perms[7] = (st_mode & S_IROTH) ? 'r' : '-';
-    perms[8] = (st_mode & S_IWOTH) ? 'w' : '-';
-    perms[9] = (st_mode & S_IXOTH) ? 'x' : '-';
-    perms[10] = '\0'; // Null-terminate the string
+	perms[0] = (S_ISDIR(st_mode)) ? 'd' : '-';
+	perms[1] = (st_mode & S_IRUSR) ? 'r' : '-';
+	perms[2] = (st_mode & S_IWUSR) ? 'w' : '-';
+	perms[3] = (st_mode & S_IXUSR) ? 'x' : '-';
+	perms[4] = (st_mode & S_IRGRP) ? 'r' : '-';
+	perms[5] = (st_mode & S_IWGRP) ? 'w' : '-';
+	perms[6] = (st_mode & S_IXGRP) ? 'x' : '-';
+	perms[7] = (st_mode & S_IROTH) ? 'r' : '-';
+	perms[8] = (st_mode & S_IWOTH) ? 'w' : '-';
+	perms[9] = (st_mode & S_IXOTH) ? 'x' : '-';
+	perms[10] = '\0'; // Null-terminate the string
 }
 
 void *take_inputs_dynamically(void *args)
@@ -58,8 +46,8 @@ void *take_inputs_dynamically(void *args)
 	return NULL;
 }
 
-void sendPathToNS(char *path, char perms[11]){
-	
+void sendPathToNS(char *path, char perms[11])
+{
 }
 
 void *serveNM_Requests(void *args)
@@ -75,6 +63,19 @@ void *serveNM_Requests(void *args)
 			perror("recv");
 		}
 		printf("Recieved from NM: %s\n", buffer);
+		char actual_request[4096];
+		char path[4096];
+		get_request(buffer, actual_request);
+		get_path(buffer, path);
+		printf("request:%s\npath:%s\n", actual_request, path);
+		if(strcmp(actual_request, "MKDIR")==0){
+			make_directory(path);
+		}else if(strcmp(actual_request, "MKFIL")==0){
+			make_file(path);
+		}else if(strcmp(actual_request, "RMFIL")==0){
+			remove_files_and_directory(path);
+		}
+		send(nmfd, "DONE", strlen("DONE"), 0);
 	}
 	return NULL;
 }
@@ -90,6 +91,7 @@ void *serveClient_Request(void *args)
 	{
 		perror("recv");
 	}
+
 	printf("Recieved from client: %s\n", buffer);
 	return NULL;
 }
@@ -229,7 +231,6 @@ int main()
 	pthread_join(inputThread, NULL);
 	pthread_join(nmThread, NULL);
 	pthread_join(clientsThread, NULL);
-  
+
 	return 0;
 }
-

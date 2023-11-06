@@ -1,5 +1,12 @@
 #include "headers.h"
 
+/*
+API CALLS:
+MKDIR
+RMFIL
+MKFIL
+*/
+
 int make_directory(char *dirname)
 {
     int check;
@@ -64,6 +71,44 @@ int recursive_directory_deletion(char *curr_address)
     remove(curr_address);
     closedir(dir);
     return 0;
+}
+
+void get_request(char request[], char actual_request[])
+{
+    if (strlen(request) < 5)
+    {
+        printf("Invalid Request\n");
+    }
+    for (int i = 0; i < 5; i++)
+    {
+        actual_request[i] = request[i + 1];
+    }
+}
+
+void get_path(char request[], char path[])
+{
+    if (strlen(request) < 5)
+    {
+        printf("Invalid Request\n");
+    }
+    for (int i = 6; i < strlen(request); i++)
+    {
+        path[i - 6] = request[i];
+    }
+    printf("\n");
+}
+
+int check_path_exists(const char *directoryPath)
+{
+	struct stat dirStat;
+	if (stat(directoryPath, &dirStat) == 0)
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 int remove_files_and_directory(char* path){

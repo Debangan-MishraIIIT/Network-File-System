@@ -1,4 +1,9 @@
 #include "headers.h"
+/*
+making the following changes:
+1) currently, client sends 0 to NS, gets details and then resends 0 to SS
+2) Now client will send "0+request" to NS, based on what the request is, NS will either send back address or do it on its own
+*/
 
 int joinSS(struct ssDetails ss)
 {
@@ -48,7 +53,15 @@ void sendRequest(char *input, int sockfd)
 	printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
 
 	int connfd = joinSS(ss);
-	bytesSent = send(connfd, request, sizeof(request), 0);
+
+	char req2[4096];
+	int iter;
+	for (iter = 1; iter<strlen(request); iter++)
+	{
+		req2[iter - 1] = request[iter];
+	}
+
+	bytesSent = send(connfd, req2, sizeof(request), 0);
 	if (bytesSent == -1)
 	{
 		perror("recv");
@@ -85,19 +98,18 @@ int joinNamingServerAsClient(char *ip, int port)
 	{
 		perror("send");
 	}
-	
+
 	char buffer[4096];
 	int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
 	if (bytesRecv == -1)
 	{
 		perror("recv");
 	}
-	if (strcmp(buffer, "ACCEPTED JOIN")!=  0)
+	if (strcmp(buffer, "ACCEPTED JOIN") != 0)
 	{
 		return -1;
 	}
 	printf("Client connected to naming server.\n");
-
 
 	return sockfd;
 }
