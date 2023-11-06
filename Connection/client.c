@@ -120,8 +120,8 @@ int main()
 			input[strlen(input) - 1] = '\0'; // removing the \n char
 		}
 
-		printf(".%ld.%s.\n", strlen(input), input);
-
+		// printf(".%ld.%s.\n", strlen(input), input);
+		sendRequest(input, sockfd);
 
 		free(input);
 	}

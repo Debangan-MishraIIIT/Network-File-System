@@ -22,10 +22,10 @@ struct ssDetails *getSSfromPath(char *path)
 {
     for (int i = 0; i < recordCount; i++)
     {
-        if (strcmp(records[i].path, path) == 0)
-        {
-            return &records[i].storageServer;
-        }
+        // if (strcmp(records[i].file, path) == 0)
+        // {
+        //     return &records[i].storageServer;
+        // }
     }
     return NULL;
 }
@@ -42,6 +42,7 @@ void sendRequestToSS(struct ssDetails *ss, char *request)
 void *acceptClientRequests(void *args)
 {
     struct cDetails *cli = (struct cDetails *)args;
+    printf("%d cli connfd\n", cli->connfd);
     while (1)
     {
         // recieve the client request
@@ -66,17 +67,6 @@ void *acceptClientRequests(void *args)
             perror("send");
         }
 
-        char buffer[4096];
-        bytesRecv = recv(cli->connfd, buffer, sizeof(buffer), 0);
-        if (bytesRecv == -1)
-        {
-            perror("recv");
-        }
-        if (strcmp(buffer, "ACCEPTED JOIN") != 0)
-        {
-            return NULL;
-        }
-
         printf("sent ss detials to client\n");
     }
     return NULL;
@@ -86,7 +76,7 @@ void addClient(int connfd)
 {
     clientDetails[clientCount].connfd = connfd;
     clientCount++;
-    printf("Client Joined\n")
+    printf("Client Joined\n");
 
     pthread_create(&clientThreads[clientCount - 1], NULL, acceptClientRequests, &clientDetails[clientCount - 1]);
 }
