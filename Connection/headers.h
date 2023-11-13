@@ -24,6 +24,7 @@
 #define SA struct sockaddr
 #define MAX_SIZE 1024
 #define maxlen 1000
+void handle_errors(char* error);
 
 struct pair
 {

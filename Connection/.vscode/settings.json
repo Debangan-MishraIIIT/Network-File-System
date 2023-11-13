@@ -2,6 +2,9 @@
     "C_Cpp.errorSquiggles": "disabled",
     "files.associations": {
         "*.html": "html",
-        "headers.h": "c"
+        "headers.h": "c",
+        "array": "c",
+        "hash_set": "c",
+        "algorithm": "c"
     }
 }

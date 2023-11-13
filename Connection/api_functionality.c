@@ -14,7 +14,10 @@ int make_directory(char *dirname)
 
     // check if directory is created or not
     if (!check)
+    {
         printf("Directory created\n");
+        return 0;
+    }
     else
     {
         printf("Unable to create directory\n");
@@ -22,20 +25,23 @@ int make_directory(char *dirname)
     }
 }
 
-int make_file(char* dirname)
+int make_file(char *dirname)
 {
     int check;
     check = creat(dirname, 0777);
 
     // check if file is created or not
-    //if file is already existing, it is cleared, just like a normal write
-    if(check==-1)
+    // if file is already existing, it is cleared, just like a normal write
+    if (check == -1)
     {
         printf("Unable to create file\n");
         return -1;
-    }else{
+    }
+    else
+    {
         printf("File created\n");
     }
+    return 0;
 }
 
 int isDirectory(const char *path)
@@ -56,22 +62,41 @@ int recursive_directory_deletion(char *curr_address)
     }
 
     struct dirent *dir_read;
+    int retval = 0; // Initialize the return value
+
     while ((dir_read = readdir(dir)) != 0)
     {
         char buffer[maxlen];
         snprintf(buffer, sizeof(buffer), "%s/%s", curr_address, dir_read->d_name);
         if (isDirectory(buffer) == 1 && strcmp(dir_read->d_name, ".") != 0 && strcmp(dir_read->d_name, "..") != 0)
         {
-            recursive_directory_deletion(buffer);
-        }else if(isDirectory(buffer) == 0){
-            remove(buffer);
+            retval = recursive_directory_deletion(buffer);
+
+            // Check the return value and continue with the loop if successful
+            if (retval != 0)
+            {
+                closedir(dir);
+                return retval;
+            }
+        }
+        else if (isDirectory(buffer) == 0)
+        {
+            retval = remove(buffer);
+
+            // Check the return value and continue with the loop if successful
+            if (retval != 0)
+            {
+                closedir(dir);
+                return retval;
+            }
         }
     }
 
-    remove(curr_address);
+    retval = remove(curr_address);
     closedir(dir);
-    return 0;
+    return retval;
 }
+
 
 void get_request(char request[], char actual_request[])
 {
@@ -100,29 +125,108 @@ void get_path(char request[], char path[])
 
 int check_path_exists(const char *directoryPath)
 {
-	struct stat dirStat;
-	if (stat(directoryPath, &dirStat) == 0)
-	{
-		return 1;
-	}
-	else
-	{
-		return 0;
-	}
+    struct stat dirStat;
+    if (stat(directoryPath, &dirStat) == 0)
+    {
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
 }
 
-int remove_files_and_directory(char* path){
-    
-	if (!check_path_exists(path))
-	{
-		return -1;
-	}
-	else
-	{
-		if(isDirectory(path)){
+int remove_files_and_directory(char *path)
+{
+
+    if (!check_path_exists(path))
+    {
+        return -1;
+    }
+    else
+    {
+        if (isDirectory(path))
+        {
             recursive_directory_deletion(path);
-        }else{
+        }
+        else
+        {
             remove(path);
         }
-	}
+    }
+}
+
+int handle_naming_server_commands(char* command, char* inputS) {
+    // Input string
+    if(strcmp("RMDIR", command)!=0 && strcmp("MKFIL", command)!=0 && strcmp("MKDIR", command)!=0){
+        handle_errors("Invalid Command");
+        return -1;
+    }
+
+    char *inputString = strdup(inputS);
+    char *token = strtok(inputString, "/");
+    char *lastToken = NULL;
+    int count=0;
+
+    // char cwd[1000];
+
+    while (token != NULL) {
+        if(lastToken!=NULL){
+            //if it is a make directory or file command, I have to make the previous directories
+            if(!isDirectory(lastToken) && (strcmp(command, "MKFIL")==0 || strcmp(command, "MKDIR")==0)){
+                printf("Creating directory: %s\n", lastToken);
+                int err1= make_directory(lastToken);
+                if(err1==-1) handle_errors("make_directory");
+
+            }else if(!isDirectory(lastToken) && strcmp(command, "RMDIR")==0){
+                handle_errors("Path does not exist");
+                return -1;
+            }
+            // getcwd(cwd, sizeof(cwd));
+            // printf("current directory: %s\n", cwd);
+            int err2= chdir(lastToken);
+            if(err2==-1) handle_errors("chdir");
+        }
+        lastToken = token;
+        token = strtok(NULL, "/");
+    }
+
+    // getcwd(cwd, sizeof(cwd));
+    // printf("current directory: %s\n", cwd);
+    int err3=0;
+
+    if (lastToken != NULL) {
+        if(strcmp(command, "MKFIL")==0){
+            err3= make_file(lastToken);
+            if(err3==-1) handle_errors("make file");
+        }else if(strcmp(command, "MKDIR")==0){
+            err3= make_directory(lastToken);
+            if(err3==-1) handle_errors("make directory");
+        }else if(strcmp(command, "RMDIR")==0){
+            printf("HERE %s\n", lastToken);
+            err3= remove_files_and_directory(lastToken);
+            if(err3==-1) handle_errors("delete file and directory");
+        }
+        if(err3==0){
+            printf("\e[0;32m%s SUCCESS!\n", command);
+        }
+    }
+    return err3;
+}
+
+void parse_input(char* array[], char* inputS){
+    char *inputString = strdup(inputS);
+    char *token = strtok(inputString, " ");
+    int count=0;
+
+    while (token != NULL) {
+        if(count==2){
+            handle_errors("invalid input");
+            break;
+        }
+        array[count]= malloc(sizeof(char)*100);
+        strcpy(array[count], token);
+        count++;
+        token = strtok(NULL, " ");
+    }
 }
