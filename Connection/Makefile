@@ -23,7 +23,7 @@ storageServer%:
 	rm $@
 
 namingServer:
-	gcc namingServer.c socket_functionality.c -o namingServer -pthread
+	gcc namingServer.c socket_functionality.c search.c -o namingServer -pthread
 	./namingServer
 	rm namingServer
 

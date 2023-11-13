@@ -19,6 +19,7 @@
 
 #include "socket.h"
 #include "api.h"
+#include "search.h"
 
 #define SA struct sockaddr
 #define MAX_SIZE 1024
@@ -65,5 +66,13 @@ struct record
     struct ssDetails *backupSS1;
     struct ssDetails *backupSS2;
     int size;
+};
+
+struct fileDetails
+{
+    char path[4096];
+    char perms[11];
+    size_t size;
+    bool isDir;
 };
 #endif
