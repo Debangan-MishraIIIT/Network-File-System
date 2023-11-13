@@ -20,39 +20,31 @@
 #include "socket.h"
 #include "api.h"
 
-#define SA struct sockaddr
-#define MAX_SIZE 1024
-#define maxlen 1000
-
-struct pair
-{
-    int first, second;
-};
-
-struct hostDetails
-{
-    char ip[16];
-    int port;
-    int connfd;
-};
-
 struct cDetails
 {
+    int clientID;
     int connfd;
 };
 
 struct ssDetails
 {
+    int ssID;
     char ip[16];
     int nmPort;
     int cliPort;
     int connfd;
+    int totalSize;
 };
 
-struct accessibleFile
+struct record
 {
-    char *path;
-    char perms[11];
+    char * path;
+    struct ssDetails *orignalSS;
+    char originalPerms[11];
+    bool isDir;
+    char currentPerms[11]; // for backup
+    struct ssDetails *backupSS1;
+    struct ssDetails *backupSS2;
+    int size;
 };
-
 #endif
