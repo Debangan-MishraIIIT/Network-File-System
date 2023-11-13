@@ -6,28 +6,20 @@ struct ssDetails storageServers[100];
 int storageServerCount = 0;
 struct cDetails clientDetails[100];
 
-struct record
-{
-    struct accessibleFile file;
-    struct ssDetails storageServer;
-};
-struct record records[100]; // need to change
+struct record records[10000]; // need to change
 int recordCount = 0;
 
 pthread_t clientThreads[100];
-// struct hostDetails clientDetails[100];
 int clientCount = 0;
+TrieNode *root;
 
-struct ssDetails *getSSfromPath(char *path)
+struct ssDetails *getRecord(char *path)
 {
-    for (int i = 0; i < recordCount; i++)
-    {
-        // if (strcmp(records[i].file, path) == 0)
-        // {
-        //     return &records[i].storageServer;
-        // }
-    }
-    return NULL;
+    struct record *tableEntry = search(root, path);
+    if (tableEntry)
+        return tableEntry->orignalSS;
+    else
+        return NULL;
 }
 
 void sendRequestToSS(struct ssDetails *ss, char *request)
@@ -42,7 +34,6 @@ void sendRequestToSS(struct ssDetails *ss, char *request)
 void *acceptClientRequests(void *args)
 {
     struct cDetails *cli = (struct cDetails *)args;
-    printf("%d cli connfd\n", cli->connfd);
     while (1)
     {
         // recieve the client request
@@ -54,8 +45,8 @@ void *acceptClientRequests(void *args)
             break;
         }
         printf("Recieved from client - \'%s\'\n", request);
-        struct ssDetails *ss = &storageServers[atoi(request)];
-        // struct ssDetails* ss = getSSfromPath(request);
+        // struct ssDetails *ss = &storageServers[atoi(request)];
+        struct ssDetails *ss = getRecord(request);
 
         printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
         sendRequestToSS(ss, request);
@@ -72,6 +63,40 @@ void *acceptClientRequests(void *args)
     return NULL;
 }
 
+void *addToRecord(void *args)
+{
+    while (1)
+    {
+        struct ssDetails *ss = (struct ssDetails *)(args);
+        struct fileDetails det;
+        int bytesRecv = recv(ss->connfd, &det, sizeof(det), 0);
+        if (bytesRecv == -1)
+        {
+            perror("recv");
+            break;
+        }
+        int i = recordCount;
+
+        records[i].size = det.size;
+
+        records[i].backupSS1 = NULL;
+        records[i].backupSS2 = NULL;
+        strcpy(records[i].currentPerms, det.perms);
+        strcpy(records[i].originalPerms, det.perms);
+        records[i].isDir = det.isDir;
+        records[i].orignalSS = ss;
+        records[i].path = malloc(sizeof(char)*4096);
+        strcpy(records[i].path, det.path);
+
+        insertRecordToTrie(root, &records[i]);
+        recordCount++;
+    }
+
+    return NULL;
+}
+
+// printREco
+
 void addClient(int connfd)
 {
     clientDetails[clientCount].connfd = connfd;
@@ -79,9 +104,6 @@ void addClient(int connfd)
     printf("Client Joined\n");
 
     pthread_create(&clientThreads[clientCount - 1], NULL, acceptClientRequests, &clientDetails[clientCount - 1]);
-}
-void *addPathFromSS(void *args){
-    
 }
 
 void addStorageServer(int connfd)
@@ -97,7 +119,7 @@ void addStorageServer(int connfd)
     printf("SS Joined %s:%d %d\n", storageServers[storageServerCount - 1].ip, storageServers[storageServerCount - 1].cliPort, storageServers[storageServerCount - 1].nmPort);
 
     pthread_t addpathThread;
-    pthread_create(&addpathThread, NULL, addPathFromSS, (void*)&storageServers[storageServerCount-1]);
+    pthread_create(&addpathThread, NULL, addToRecord, (void *)&storageServers[storageServerCount - 1]);
     // TODO: add storage server disconnection message
 }
 
@@ -164,7 +186,11 @@ int initializeNamingServer(int port)
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
     servaddr.sin_port = htons(port);
 
-    if ((bind(sockfd, (SA *)&servaddr, sizeof(servaddr))) != 0)
+    // to avoid bind error
+    int opt = 1;
+    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    if ((bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) != 0)
     {
         perror("bind");
         exit(0);
@@ -177,6 +203,7 @@ int main()
 {
     int port = 6969;
     int nmSock = initializeNamingServer(port);
+    root = initTrieNode();
 
     pthread_t acceptHostThread;
     pthread_create(&acceptHostThread, NULL, acceptHost, &nmSock);

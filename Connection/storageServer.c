@@ -1,35 +1,53 @@
 #include "headers.h"
 // there should be an inifinite thread in the NS side that also checks and updates the paths
 
-// int check_path_exists(const char *directoryPath)
-// {
-// 	struct stat dirStat;
-// 	if (stat(directoryPath, &dirStat) == 0)
-// 	{
-// 		return 1;
-// 	}
-// 	else
-// 	{
-// 		return 0;
-// 	}
-// }
+int check_path_exists(const char *directoryPath)
+{
+	struct stat dirStat;
+	if (stat(directoryPath, &dirStat) == 0)
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
 
-void convertPermissions(mode_t st_mode, char *perms) {
-    perms[0] = (S_ISDIR(st_mode)) ? 'd' : '-';
-    perms[1] = (st_mode & S_IRUSR) ? 'r' : '-';
-    perms[2] = (st_mode & S_IWUSR) ? 'w' : '-';
-    perms[3] = (st_mode & S_IXUSR) ? 'x' : '-';
-    perms[4] = (st_mode & S_IRGRP) ? 'r' : '-';
-    perms[5] = (st_mode & S_IWGRP) ? 'w' : '-';
-    perms[6] = (st_mode & S_IXGRP) ? 'x' : '-';
-    perms[7] = (st_mode & S_IROTH) ? 'r' : '-';
-    perms[8] = (st_mode & S_IWOTH) ? 'w' : '-';
-    perms[9] = (st_mode & S_IXOTH) ? 'x' : '-';
-    perms[10] = '\0'; // Null-terminate the string
+void convertPermissions(mode_t st_mode, char *perms)
+{
+	perms[0] = (S_ISDIR(st_mode)) ? 'd' : '-';
+	perms[1] = (st_mode & S_IRUSR) ? 'r' : '-';
+	perms[2] = (st_mode & S_IWUSR) ? 'w' : '-';
+	perms[3] = (st_mode & S_IXUSR) ? 'x' : '-';
+	perms[4] = (st_mode & S_IRGRP) ? 'r' : '-';
+	perms[5] = (st_mode & S_IWGRP) ? 'w' : '-';
+	perms[6] = (st_mode & S_IXGRP) ? 'x' : '-';
+	perms[7] = (st_mode & S_IROTH) ? 'r' : '-';
+	perms[8] = (st_mode & S_IWOTH) ? 'w' : '-';
+	perms[9] = (st_mode & S_IXOTH) ? 'x' : '-';
+	perms[10] = '\0'; // Null-terminate the string
+}
+
+void sendPathToNS(char *path, char perms[11], size_t size, int nmSock)
+{
+	struct fileDetails *det = (struct fileDetails *)malloc(sizeof(struct fileDetails));
+	strcpy(det->path, path);
+	strcpy(det->perms, perms);
+	det->size = size;
+	det->isDir = perms[0] == '-' ? false : true;
+
+	int bytesSent = send(nmSock, det, sizeof(struct fileDetails), 0);
+	if (bytesSent == -1)
+	{
+		perror("send");
+	}
+	printf("File detials sent to SS\n");
 }
 
 void *take_inputs_dynamically(void *args)
 {
+	int nmSock = *(int *)(args);
 	while (1)
 	{
 		char *path;
@@ -47,7 +65,11 @@ void *take_inputs_dynamically(void *args)
 			}
 			char perms[11];
 			convertPermissions(dirStat.st_mode, perms);
+			size_t size = dirStat.st_size;
+			printf("path: %s\n", path);
 			printf("Permission bits: %s\n", perms);
+			printf("Size: %zu bytes\n", size);
+			sendPathToNS(path, perms, size, nmSock);
 			// send path to NS
 		}
 		else
@@ -56,10 +78,6 @@ void *take_inputs_dynamically(void *args)
 		}
 	}
 	return NULL;
-}
-
-void sendPathToNS(char *path, char perms[11]){
-	
 }
 
 void *serveNM_Requests(void *args)
@@ -74,6 +92,11 @@ void *serveNM_Requests(void *args)
 		{
 			perror("recv");
 		}
+		if (bytesRecv == 0)
+		{
+			break;
+		}
+		
 		printf("Recieved from NM: %s\n", buffer);
 	}
 	return NULL;
@@ -133,6 +156,10 @@ int initializeNMConnection(char *ip, int port, int nmPort, int cliPort)
 	cliaddr.sin_family = AF_INET;
 	cliaddr.sin_addr.s_addr = inet_addr(ip);
 	cliaddr.sin_port = htons(nmPort);
+
+	// to avoid bind error
+	int opt = 1;
+	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
 	if ((bind(sockfd, (SA *)&cliaddr, sizeof(cliaddr))) != 0)
 	{
@@ -203,7 +230,11 @@ int initialzeClientsConnection(int port)
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	servaddr.sin_port = htons(port);
 
-	if ((bind(sockfd, (SA *)&servaddr, sizeof(servaddr))) != 0)
+	// to avoid bind error
+	int opt = 1;
+	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+	if ((bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) != 0)
 	{
 		perror("bind");
 		exit(0);
@@ -224,11 +255,11 @@ int main()
 	pthread_t nmThread, clientsThread, inputThread;
 	pthread_create(&nmThread, NULL, serveNM_Requests, (void *)&nmSock);
 	pthread_create(&clientsThread, NULL, acceptClients, (void *)&cliSock);
-	pthread_create(&inputThread, NULL, take_inputs_dynamically, NULL);
+	pthread_create(&inputThread, NULL, take_inputs_dynamically, (void *)&nmSock);
 
 	pthread_join(inputThread, NULL);
 	pthread_join(nmThread, NULL);
 	pthread_join(clientsThread, NULL);
-  
+
 	return 0;
 }
