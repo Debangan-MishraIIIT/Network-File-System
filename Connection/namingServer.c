@@ -15,12 +15,27 @@ int recordCount = 0;
 pthread_t clientThreads[10000];
 int clientCount = 0;
 TrieNode *root;
+LRUCache *myCache;
 
 struct ssDetails *getRecord(char *path)
 {
-    struct record *tableEntry = search(root, path);
+    struct record *tableEntry;
+    // first check if path exists in cache or not
+    tableEntry = searchFileInCache(myCache, path);
+    // printCache(myCache);
     if (tableEntry)
         return tableEntry->orignalSS;
+
+    // printf("LOL!\n");
+
+    tableEntry = search(root, path);
+    if (tableEntry)
+    {
+        // add the record to cache since it was not present before
+        addFile(myCache, tableEntry);
+        printf("Record added to cache!\n");
+        return tableEntry->orignalSS;
+    }
     else
         return NULL;
 }
@@ -111,8 +126,6 @@ void *addToRecord(void *args)
 
     return NULL;
 }
-
-// printREco
 
 void addClient(int connfd)
 {
@@ -245,6 +258,7 @@ int main(int argc, char *argv[])
     int port = atoi(argv[1]);
     int nmSock = initializeNamingServer(port);
     root = initTrieNode();
+    myCache = initCache();
 
     for (int i = 0; i < 10000; i++)
     {
@@ -262,5 +276,6 @@ int main(int argc, char *argv[])
         pthread_join(clientThreads[i], NULL);
     }
 
+    freeCache(myCache);
     return 0;
 }
