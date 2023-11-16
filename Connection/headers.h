@@ -52,6 +52,7 @@ struct ssDetails
     int nmPort;
     int cliPort;
     int connfd;
+    int addPathfd;
 };
 
 struct accessibleFile

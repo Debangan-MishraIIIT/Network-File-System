@@ -202,6 +202,32 @@ int initializeNMConnection(char *ip, int port, int nmPort, int cliPort)
 	return sockfd;
 }
 
+int initializeNMConnectionForRecords(char *ip, int port)
+{
+	int sockfd;
+	struct sockaddr_in servaddr, cliaddr;
+
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd == -1)
+	{
+		perror("socket");
+		exit(0);
+	}
+	bzero(&servaddr, sizeof(servaddr));
+
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_addr.s_addr = inet_addr(ip);
+	servaddr.sin_port = htons(port);
+
+	if (connect(sockfd, (SA *)&servaddr, sizeof(servaddr)) != 0)
+	{
+		perror("connect");
+		exit(0);
+	}
+
+	return sockfd;
+}
+
 int initialzeClientsConnection(int port)
 {
 	int sockfd;
@@ -248,12 +274,13 @@ int main(int argc, char *argv[])
 	int cliPort = atoi(argv[2]);
 	printf("NMPORT: %d, CLIPORT:%d\n", nmPort, cliPort);
 	int cliSock = initialzeClientsConnection(cliPort);
-	int nmSock = initializeNMConnection("127.0.0.1", 6969, nmPort, cliPort);
+	int nmSock1 = initializeNMConnection("127.0.0.1", 6969, nmPort, cliPort); // for feedback transfer
+	int nmSock2 = initializeNMConnectionForRecords("127.0.0.1", 6969); // for records
 
 	pthread_t nmThread, clientsThread, inputThread;
-	pthread_create(&nmThread, NULL, serveNM_Requests, (void *)&nmSock);
+	pthread_create(&nmThread, NULL, serveNM_Requests, (void *)&nmSock1);
 	pthread_create(&clientsThread, NULL, acceptClients, (void *)&cliSock);
-	pthread_create(&inputThread, NULL, take_inputs_dynamically, (void *)&nmSock);
+	pthread_create(&inputThread, NULL, take_inputs_dynamically, (void *)&nmSock2);
 
 	pthread_join(inputThread, NULL);
 	pthread_join(nmThread, NULL);

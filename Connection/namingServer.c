@@ -17,6 +17,8 @@ int clientCount = 0;
 TrieNode *root;
 LRUCache *myCache;
 
+int nmSock;
+
 struct ssDetails *getRecord(char *path)
 {
     struct record *tableEntry;
@@ -97,7 +99,7 @@ void *addToRecord(void *args)
         struct ssDetails *ss = (struct ssDetails *)(args);
         struct fileDetails det;
         bzero(&det, sizeof(det));
-        int bytesRecv = recv(ss->connfd, &det, sizeof(det), 0);
+        int bytesRecv = recv(ss->addPathfd, &det, sizeof(det), 0);
         if (bytesRecv == -1)
         {
             perror("recv");
@@ -163,6 +165,18 @@ void addStorageServer(int connfd)
     }
     storageServers[storageServerCount].connfd = connfd;
     storageServers[storageServerCount].id = storageServerCount + 1;
+
+     // create a new sockfd for adding paths dynamically
+    struct sockaddr_in cli;
+    socklen_t len = sizeof(cli);
+    connfd = accept(nmSock, (struct sockaddr *)&cli, &len);
+    if (connfd < 0)
+    {
+        perror("accept");
+        exit(EXIT_FAILURE);
+    }
+
+    storageServers[storageServerCount].addPathfd = connfd;
 
     storageServerCount++;
     storageServerCount %= 10000;
@@ -260,7 +274,7 @@ int main(int argc, char *argv[])
         exit(0);
     }
     int port = atoi(argv[1]);
-    int nmSock = initializeNamingServer(port);
+    nmSock = initializeNamingServer(port);
     root = initTrieNode();
     myCache = initCache();
 
