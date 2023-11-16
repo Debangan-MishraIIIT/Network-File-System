@@ -56,6 +56,7 @@ void *acceptClientRequests(void *args)
     {
         // recieve the client request
         char request[4096];
+        bzero(request, sizeof(request));
         int bytesRecv = recv(cli->connfd, request, sizeof(request), 0);
         if (bytesRecv == -1)
         {
@@ -95,6 +96,7 @@ void *addToRecord(void *args)
     {
         struct ssDetails *ss = (struct ssDetails *)(args);
         struct fileDetails det;
+        bzero(&det, sizeof(det));
         int bytesRecv = recv(ss->connfd, &det, sizeof(det), 0);
         if (bytesRecv == -1)
         {
@@ -152,6 +154,7 @@ void addStorageServer(int connfd)
         storageServerCount %= 10000;
     }
 
+    bzero(&storageServers[storageServerCount], sizeof(storageServers[storageServerCount]));
     int bytesRecv = recv(connfd, &storageServers[storageServerCount], sizeof(storageServers[storageServerCount]), 0);
     if (bytesRecv == -1)
     {
@@ -160,7 +163,7 @@ void addStorageServer(int connfd)
     }
     storageServers[storageServerCount].connfd = connfd;
     storageServers[storageServerCount].id = storageServerCount + 1;
-    
+
     storageServerCount++;
     storageServerCount %= 10000;
 
@@ -191,6 +194,7 @@ void *acceptHost(void *args)
             exit(EXIT_FAILURE);
         }
         char buffer[4096];
+        bzero(buffer, sizeof(buffer));
         int bytesRecv = recv(connfd, buffer, sizeof(buffer), 0);
         if (bytesRecv == -1)
         {
