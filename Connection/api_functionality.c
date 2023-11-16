@@ -153,6 +153,7 @@ int remove_files_and_directory(char *path)
         {
             remove(path);
         }
+        return 0;
     }
 }
 

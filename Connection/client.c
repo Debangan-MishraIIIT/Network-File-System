@@ -25,7 +25,7 @@ int joinSS(struct ssDetails ss)
 	return sockfd;
 }
 
-void sendRequest(char *input, int sockfd)
+int sendRequest(char *input, int sockfd)
 {
 	// send request
 	char request[4096];
@@ -37,6 +37,12 @@ void sendRequest(char *input, int sockfd)
 	{
 		perror("send");
 	}
+	if (bytesSent == 0)
+	{
+		// nm has disconnected
+		return -1;
+	}
+
 	// printf("here");
 	// recieve the storage server details
 	struct ssDetails ss;
@@ -45,6 +51,11 @@ void sendRequest(char *input, int sockfd)
 	{
 		perror("recv");
 	}
+	if (bytesRecv == 0)
+	{
+		return -1;
+	}
+
 	printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
 
 	int connfd = joinSS(ss);
@@ -54,6 +65,7 @@ void sendRequest(char *input, int sockfd)
 		perror("recv");
 	}
 	printf("\'%s\' sent to SS %s:%d\n", request, ss.ip, ss.cliPort);
+	return 0;
 }
 
 int joinNamingServerAsClient(char *ip, int port)
@@ -85,27 +97,60 @@ int joinNamingServerAsClient(char *ip, int port)
 	{
 		perror("send");
 	}
-	
+
 	char buffer[4096];
 	int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
 	if (bytesRecv == -1)
 	{
 		perror("recv");
 	}
-	if (strcmp(buffer, "ACCEPTED JOIN")!=  0)
+	if (strcmp(buffer, "ACCEPTED JOIN") != 0)
 	{
 		return -1;
 	}
 	printf("Client connected to naming server.\n");
 
-
 	return sockfd;
 }
 
-int main()
+void *isNMConnected(void *args)
 {
-	int namingServerPort = 6969;
+	int sockfd = *(int *)(args);
+	while (1)
+	{
+		sleep(1);
+		int error;
+		socklen_t len = sizeof(error);
+		int ret = getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &error, &len);
+
+		if (ret == 0 && error == 0)
+		{
+			continue;
+		}
+		else
+		{
+			printf("NM Disconnected\n");
+			exit(0);
+		}
+	}
+	return NULL;
+}
+
+int main(int argc, char *argv[])
+{
+	if (argc != 2)
+	{
+		printf("Invalid Arguments!\n");
+		exit(0);
+	}
+
+	int namingServerPort = atoi(argv[1]);
+	// int namingServerPort = 6969;
 	int sockfd = joinNamingServerAsClient("127.0.0.1", namingServerPort);
+
+	pthread_t disconnectionThread;
+	pthread_create(&disconnectionThread, NULL, isNMConnected, &sockfd);
+
 	while (1)
 	{
 		// char input[4096];
@@ -121,10 +166,19 @@ int main()
 		}
 
 		// printf(".%ld.%s.\n", strlen(input), input);
-		sendRequest(input, sockfd);
-
+		int status = sendRequest(input, sockfd);
+		if (status == -1)
+		{
+			printf("NM Disconnected\n");
+			exit(0);
+			break;
+		}
+		if (status == 0)
+		{
+			printf("Successful Request \n");
+		}
 		free(input);
 	}
-
+	pthread_join(disconnectionThread, NULL);
 	return 0;
 }

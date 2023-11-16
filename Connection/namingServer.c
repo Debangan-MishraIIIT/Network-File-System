@@ -2,14 +2,17 @@
 
 // TODO: to be modified to a more efficient (non restrictive) method of storage. Implementing simple array for now
 
-struct ssDetails storageServers[100];
+struct ssDetails storageServers[10000];
+bool validSS[10000];
 int storageServerCount = 0;
-struct cDetails clientDetails[100];
 
-struct record records[10000]; // need to change
+struct cDetails clientDetails[10000];
+bool validCli[10000];
+
+struct record records[10000];
 int recordCount = 0;
 
-pthread_t clientThreads[100];
+pthread_t clientThreads[10000];
 int clientCount = 0;
 TrieNode *root;
 LRUCache *myCache;
@@ -59,8 +62,16 @@ void *acceptClientRequests(void *args)
             // perror("recv");
             break;
         }
+        if (bytesRecv == 0)
+        {
+            // clinent disconnects
+            printf("Client %d Disconnected\n", cli->id);
+            break;
+        }
+
         printf("Recieved from client - \'%s\'\n", request);
         // struct ssDetails *ss = &storageServers[atoi(request)];
+
         struct ssDetails *ss = getRecord(request);
 
         printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
@@ -90,6 +101,12 @@ void *addToRecord(void *args)
             perror("recv");
             break;
         }
+        if (bytesRecv == 0)
+        {
+            // ss disconnects
+            printf("SS %d Disconnected\n", ss->id);
+            break;
+        }
         int i = recordCount;
 
         records[i].size = det.size;
@@ -112,8 +129,16 @@ void *addToRecord(void *args)
 
 void addClient(int connfd)
 {
+    while (validSS[clientCount])
+    {
+        clientCount++;
+        clientCount %= 10000;
+    }
     clientDetails[clientCount].connfd = connfd;
+    clientDetails[clientCount].id = clientCount + 1;
     clientCount++;
+    clientCount %= 10000;
+
     printf("Client Joined\n");
 
     pthread_create(&clientThreads[clientCount - 1], NULL, acceptClientRequests, &clientDetails[clientCount - 1]);
@@ -121,6 +146,12 @@ void addClient(int connfd)
 
 void addStorageServer(int connfd)
 {
+    while (validSS[storageServerCount])
+    {
+        storageServerCount++;
+        storageServerCount %= 10000;
+    }
+
     int bytesRecv = recv(connfd, &storageServers[storageServerCount], sizeof(storageServers[storageServerCount]), 0);
     if (bytesRecv == -1)
     {
@@ -128,7 +159,11 @@ void addStorageServer(int connfd)
         return;
     }
     storageServers[storageServerCount].connfd = connfd;
+    storageServers[storageServerCount].id = storageServerCount + 1;
+    
     storageServerCount++;
+    storageServerCount %= 10000;
+
     printf("SS Joined %s:%d %d\n", storageServers[storageServerCount - 1].ip, storageServers[storageServerCount - 1].cliPort, storageServers[storageServerCount - 1].nmPort);
 
     pthread_t addpathThread;
@@ -212,12 +247,24 @@ int initializeNamingServer(int port)
     return sockfd;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    int port = 6969;
+    // int port = 6969;
+    if (argc != 2)
+    {
+        printf("Invalid Arguments!\n");
+        exit(0);
+    }
+    int port = atoi(argv[1]);
     int nmSock = initializeNamingServer(port);
     root = initTrieNode();
     myCache = initCache();
+
+    for (int i = 0; i < 10000; i++)
+    {
+        validCli[i] = false;
+        validSS[i] = false;
+    }
 
     pthread_t acceptHostThread;
     pthread_create(&acceptHostThread, NULL, acceptHost, &nmSock);
