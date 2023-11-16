@@ -12,12 +12,27 @@ int recordCount = 0;
 pthread_t clientThreads[100];
 int clientCount = 0;
 TrieNode *root;
+LRUCache *myCache;
 
 struct ssDetails *getRecord(char *path)
 {
-    struct record *tableEntry = search(root, path);
+    struct record *tableEntry;
+    // first check if path exists in cache or not
+    tableEntry = searchFileInCache(myCache, path);
+    // printCache(myCache);
     if (tableEntry)
         return tableEntry->orignalSS;
+
+    // printf("LOL!\n");
+
+    tableEntry = search(root, path);
+    if (tableEntry)
+    {
+        // add the record to cache since it was not present before
+        addFile(myCache, tableEntry);
+        printf("Record added to cache!\n");
+        return tableEntry->orignalSS;
+    }
     else
         return NULL;
 }
@@ -85,7 +100,7 @@ void *addToRecord(void *args)
         strcpy(records[i].originalPerms, det.perms);
         records[i].isDir = det.isDir;
         records[i].orignalSS = ss;
-        records[i].path = malloc(sizeof(char)*4096);
+        records[i].path = malloc(sizeof(char) * 4096);
         strcpy(records[i].path, det.path);
 
         insertRecordToTrie(root, &records[i]);
@@ -94,8 +109,6 @@ void *addToRecord(void *args)
 
     return NULL;
 }
-
-// printREco
 
 void addClient(int connfd)
 {
@@ -204,6 +217,7 @@ int main()
     int port = 6969;
     int nmSock = initializeNamingServer(port);
     root = initTrieNode();
+    myCache = initCache();
 
     pthread_t acceptHostThread;
     pthread_create(&acceptHostThread, NULL, acceptHost, &nmSock);
@@ -215,5 +229,6 @@ int main()
         pthread_join(clientThreads[i], NULL);
     }
 
+    freeCache(myCache);
     return 0;
 }

@@ -1,18 +1,7 @@
 #include "headers.h"
 // there should be an inifinite thread in the NS side that also checks and updates the paths
 
-int check_path_exists(const char *directoryPath)
-{
-	struct stat dirStat;
-	if (stat(directoryPath, &dirStat) == 0)
-	{
-		return 1;
-	}
-	else
-	{
-		return 0;
-	}
-}
+
 
 void convertPermissions(mode_t st_mode, char *perms)
 {

@@ -20,6 +20,7 @@
 #include "socket.h"
 #include "api.h"
 #include "search.h"
+#include "cache.h"
 
 #define SA struct sockaddr
 #define MAX_SIZE 1024
