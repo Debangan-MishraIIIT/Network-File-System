@@ -40,11 +40,13 @@ struct hostDetails
 
 struct cDetails
 {
+    int id;
     int connfd;
 };
 
 struct ssDetails
 {
+    int id;
     char ip[16];
     int nmPort;
     int cliPort;

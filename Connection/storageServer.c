@@ -1,19 +1,6 @@
 #include "headers.h"
 // there should be an inifinite thread in the NS side that also checks and updates the paths
 
-int check_path_exists(const char *directoryPath)
-{
-	struct stat dirStat;
-	if (stat(directoryPath, &dirStat) == 0)
-	{
-		return 1;
-	}
-	else
-	{
-		return 0;
-	}
-}
-
 void convertPermissions(mode_t st_mode, char *perms)
 {
 	perms[0] = (S_ISDIR(st_mode)) ? 'd' : '-';
@@ -94,9 +81,11 @@ void *serveNM_Requests(void *args)
 		}
 		if (bytesRecv == 0)
 		{
+			printf("NM disconnected\n");
+			exit(0);
 			break;
 		}
-		
+
 		printf("Recieved from NM: %s\n", buffer);
 	}
 	return NULL;
@@ -113,6 +102,7 @@ void *serveClient_Request(void *args)
 	{
 		perror("recv");
 	}
+	
 	printf("Recieved from client: %s\n", buffer);
 	return NULL;
 }
@@ -245,10 +235,18 @@ int initialzeClientsConnection(int port)
 	return sockfd;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-	int nmPort = 6970;
-	int cliPort = 6971;
+	// int nmPort = 6970;
+	// int cliPort = 6971;
+	if (argc != 3)
+	{
+		printf("Invalid Arguments!\n");
+		exit(0);
+	}
+	int nmPort = atoi(argv[1]);
+	int cliPort = atoi(argv[2]);
+	printf("NMPORT: %d, CLIPORT:%d\n", nmPort, cliPort);
 	int cliSock = initialzeClientsConnection(cliPort);
 	int nmSock = initializeNMConnection("127.0.0.1", 6969, nmPort, cliPort);
 
