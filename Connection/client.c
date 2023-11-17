@@ -29,51 +29,67 @@ int sendRequest(char *input, int sockfd)
 {
 	// send request
 	char request[4096];
+	bzero(request, sizeof(request));
 	strcpy(request, input);
-	// printf("req: %s\nin: %s\n", request, input);
-	// printf(".%d,%d,\n", strlen(request), strlen(input));
 	int bytesSent = send(sockfd, request, strlen(request), 0);
 	if (bytesSent == -1)
 	{
-		perror("send");
+		handle_errors("send");
 	}
-	if (bytesSent == 0)
+
+	char *arg_arr[2];
+	parse_input(arg_arr, input);
+	char *request_command = arg_arr[0];
+
+	if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)
 	{
-		// nm has disconnected
-		return -1;
+		char buffer[1000];
+		bzero(buffer, sizeof(buffer));
+		int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
+
+		if (!strcmp(buffer, "error"))
+		{
+			return -2;
+		}
+
+		if (bytesRecv == -1)
+		{
+			handle_errors("recv");
+		}
+		printf("Recieved from NM\n%s\n\n", buffer);
 	}
-
-	// printf("here");
-	// recieve the storage server details
-	struct ssDetails ss;
-
-	int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
-
-	if (bytesRecv == -1)
+	else
 	{
-		perror("recv");
-		return -2;
-	}
+		// printf("here");
+		// recieve the storage server details
+		struct ssDetails ss;
+		int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
 
-	if (bytesRecv == 0)
-	{
-		return -1;
-	}
-	if (ss.id == -1)
-	{
-		return -2;
-	}
+		if (bytesRecv == -1)
+		{
+			perror("recv");
+			return -2;
+		}
 
-	printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
+		if (bytesRecv == 0)
+		{
+			return -1;
+		}
+		if (ss.id == -1)
+		{
+			return -2;
+		}
 
-	int connfd = joinSS(ss);
-	bytesSent = send(connfd, request, sizeof(request), 0);
-	if (bytesSent == -1)
-	{
-		perror("recv");
+		printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
+
+		int connfd = joinSS(ss);
+		bytesSent = send(connfd, request, sizeof(request), 0);
+		if (bytesSent == -1)
+		{
+			handle_errors("recv");
+		}
+		printf("\'%s\' sent to SS %s:%d\n", request, ss.ip, ss.cliPort);
 	}
-	printf("\'%s\' sent to SS %s:%d\n", request, ss.ip, ss.cliPort);
-	return 0;
 }
 
 int joinNamingServerAsClient(char *ip, int port)

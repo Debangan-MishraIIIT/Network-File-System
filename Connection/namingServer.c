@@ -54,50 +54,163 @@ void sendRequestToSS(struct ssDetails *ss, char *request)
     }
 }
 
+void removeToken(char *str)
+{
+    char *lastSlash = strrchr(str, '/');
+    if (lastSlash != NULL)
+    {
+        *lastSlash = '\0';
+    }
+}
+
+void splitPath(char *inputPath, char *outputParts[2])
+{
+    char path[1024];
+    strcpy(path, inputPath);
+
+    char *lastSlash = strrchr(path, '/');
+    if (lastSlash != NULL)
+    {
+        *lastSlash = '\0';
+        outputParts[0] = path;
+        outputParts[1] = lastSlash + 1;
+    }
+    else
+    {
+        outputParts[0] = path;
+        outputParts[1] = NULL;
+    }
+}
+
+struct ssDetails *find_final_path(char *path)
+{
+    char *temp_request = malloc(sizeof(char) * 1000);
+    strcpy(temp_request, path);
+    printf("%s\n", temp_request);
+    struct ssDetails *ss = getRecord(temp_request);
+    if (ss != NULL)
+    {
+        printf("found\n");
+        return ss;
+    }
+    while (strchr(temp_request, '/') != NULL)
+    {
+        removeToken(temp_request);
+        printf("%s\n", temp_request);
+        struct ssDetails *ss = getRecord(temp_request);
+        if (ss != NULL)
+        {
+            printf("found\n");
+            return ss;
+        }
+    }
+    ss = malloc(sizeof(struct ssDetails));
+    ss->id = -1;
+    return ss;
+}
+
 void *acceptClientRequests(void *args)
 {
     struct cDetails *cli = (struct cDetails *)args;
+    char request[4096];
     while (1)
     {
         // recieve the client request
-        char request[4096];
         bzero(request, sizeof(request));
         int bytesRecv = recv(cli->connfd, request, sizeof(request), 0);
         if (bytesRecv == -1)
         {
-            // perror("recv");
-            break;
-        }
-        if (bytesRecv == 0)
-        {
-            // clinent disconnects
-            printf("Client %d Disconnected\n", cli->id);
+            // handle_errors("recv");
             break;
         }
 
         printf("Recieved from client - \'%s\'\n", request);
         // struct ssDetails *ss = &storageServers[atoi(request)];
 
-        struct ssDetails *ss = getRecord(request);
+        // get path-index 1 and command- index 0 from address
+        char *argument_array[3];
+        parse_input(argument_array, request);
+        char *request_command = argument_array[0];
+        char *request_path = argument_array[1];
 
-        if (!ss)
+        // changes starting here
+        // handle null values here
+        struct ssDetails *ss = find_final_path(request_path);
+        if (ss->id == -1)
         {
-            ss = malloc(sizeof(struct ssDetails));
-            ss->id = -1;
+            char buffer[1000];
+            strcpy(buffer, "error");
+            int bytesSent = send(cli->connfd, buffer, sizeof(buffer), 0);
+            if (bytesSent == -1)
+            {
+                handle_errors("send");
+            }
+            continue;
         }
+        printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
+
+        // if privileged
+        if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0)
+        {
+            sendRequestToSS(ss, request);
+
+            char buffer[1000];
+            bzero(buffer, sizeof(buffer));
+            int bytesRecv = recv(ss->connfd, buffer, sizeof(buffer), 0);
+            printf("receieve from server: %s\n", buffer);
+
+            int bytesSent = send(cli->connfd, buffer, sizeof(buffer), 0);
+            printf("sent execution to client\n");
+        }
+        else if (strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)
+        {
+            // first listen and copy locally
+            sendRequestToSS(ss, request);
+            receive_directory(ss->connfd);
+
+            // acknowledgement window not opened
+            char buffer[1000];
+            bzero(buffer, sizeof(buffer));
+            int bytesRecv = recv(ss->connfd, buffer, sizeof(buffer), 0);
+            printf("receieve from server: %s\n", buffer);
+
+            bzero(buffer, sizeof(buffer));
+            int bytesSent = send(cli->connfd, buffer, sizeof(buffer), 0);
+            printf("sent execution to client\n");
+            bzero(buffer, sizeof(buffer));
+
+            // now send the received files
+            printf("HERE!!!\n");
+            char *temparr[2];
+            splitPath(request_path, temparr);
+            char *lastToken = temparr[1];
+            char send_buffer[1000];
+            char *final_path = argument_array[2];
+            snprintf(send_buffer, sizeof(send_buffer), "RECDIR %s", final_path);
+            printf("%s\n", final_path);
+            struct ssDetails *ss2 = find_final_path(final_path);
+            printf("SS recipient Details: %s:%d\n", ss2->ip, ss2->cliPort);
+            sendRequestToSS(ss2, send_buffer);
+
+            int resp = recursive_directory_sending(lastToken, ss2->connfd);
+            if (resp == -1)
+            {
+                handleFileOperationError("recursive_directory_sending");
+            }
+            send(ss2->connfd, "END", sizeof("END"), 0);
+        }
+        // not privileged
         else
         {
-            printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
             sendRequestToSS(ss, request);
+            // send storage server details
+            int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
+            if (bytesSent == -1)
+            {
+                handle_errors("send");
+            }
+            printf("sent ss details to client\n");
         }
-        // send storage server details
-        int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
-        if (bytesSent == -1)
-        {
-            perror("send");
-        }
-
-        printf("sent ss detials to client\n");
     }
     return NULL;
 }

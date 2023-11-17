@@ -83,4 +83,5 @@ struct fileDetails
     size_t size;
     bool isDir;
 };
+
 #endif

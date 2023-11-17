@@ -3,9 +3,69 @@
 /*
 API CALLS:
 MKDIR
-RMFIL
-MKFIL
+RMFILE
+MKFILE
+COPYDIR
 */
+
+int send_file(char *filename, int sockfd)
+{
+    int fd = open(filename, O_RDONLY);
+    if (fd == -1)
+    {
+        handleSYSandInputErrors("open");
+        return -1;
+    }
+    char buf[MAX_SIZE];
+    ssize_t bytes_read = read(fd, buf, MAX_SIZE);
+    while (bytes_read > 0)
+    {
+        ssize_t resp = write(sockfd, buf, bytes_read);
+        if (resp == -1)
+        {
+            handleSYSandInputErrors("write");
+            return -1;
+        }
+        bzero(buf, MAX_SIZE);
+        bytes_read = read(fd, buf, MAX_SIZE);
+    }
+    if (bytes_read == -1)
+    {
+        handleSYSandInputErrors("read");
+        return -1;
+    }
+    return 0; // Success
+}
+
+int receive_file(char *filename, int sockfd)
+{
+    int fd = open(filename, O_WRONLY | O_CREAT, 0644);
+    if (fd == -1)
+    {
+        handleSYSandInputErrors("open");
+        return -1;
+    }
+    char buf[MAX_SIZE];
+    ssize_t bytes_read = read(sockfd, buf, MAX_SIZE);
+    while (bytes_read > 0)
+    {
+        ssize_t resp = write(fd, buf, bytes_read);
+        if (resp == -1)
+        {
+            handleSYSandInputErrors("write");
+            return -1;
+        }
+        bzero(buf, MAX_SIZE);
+        bytes_read = read(sockfd, buf, MAX_SIZE);
+    }
+    if (bytes_read == -1)
+    {
+        handleSYSandInputErrors("read");
+
+        return -1;
+    }
+    return 0; // Success
+}
 
 int make_directory(char *dirname)
 {
@@ -99,6 +159,81 @@ int recursive_directory_deletion(char *curr_address)
     return retval;
 }
 
+int recursive_directory_sending(char *curr_address, int nmfd)
+{
+    DIR *dir = opendir(curr_address);
+    if (dir == NULL)
+    {
+        handleFileOperationError("opendir");
+        return -1;
+    }
+
+    struct dirent *dir_read;
+    int retval = 0;
+
+    char *sender_buffer = (char *)malloc(maxlen);
+    if (sender_buffer == NULL)
+    {
+        handleSYSandInputErrors("malloc");
+        closedir(dir);
+        return -1;
+    }
+
+    while ((dir_read = readdir(dir)) != NULL)
+    {
+        char buffer[maxlen];
+        char send_buffer[maxlen];
+        char recv_buffer[100];
+        snprintf(buffer, sizeof(buffer), "%s/%s", curr_address, dir_read->d_name);
+
+        if (strcmp(dir_read->d_name, ".") != 0 && strcmp(dir_read->d_name, "..") != 0 && dir_read->d_name[0] != '.')
+        {
+            if (isDirectory(buffer))
+            {
+                bzero(send_buffer, sizeof(send_buffer));
+                snprintf(send_buffer, maxlen, "dir %s", buffer);
+                printf("%s\n", send_buffer);
+
+                bzero(send_buffer, sizeof(send_buffer));
+                send(nmfd, send_buffer, strlen(send_buffer), 0);
+                recv(nmfd, recv_buffer, sizeof(recv_buffer), 0);
+                printf("%s\n", recv_buffer);
+
+                retval = recursive_directory_sending(buffer, nmfd);
+
+                if (retval != 0)
+                {
+                    free(sender_buffer);
+                    closedir(dir);
+                    return retval;
+                }
+            }
+            else
+            {
+                bzero(send_buffer, sizeof(send_buffer));
+                snprintf(send_buffer, maxlen, "file %s", buffer);
+                printf("%s\n", send_buffer);
+
+                bzero(send_buffer, sizeof(send_buffer));
+                send(nmfd, send_buffer, strlen(send_buffer), 0);
+                recv(nmfd, recv_buffer, sizeof(recv_buffer), 0);
+                printf("%s\n", recv_buffer);
+
+                if (retval != 0)
+                {
+                    free(sender_buffer);
+                    closedir(dir);
+                    return retval;
+                }
+            }
+        }
+    }
+
+    free(sender_buffer);
+    closedir(dir);
+    return retval;
+}
+
 void get_request(char request[], char actual_request[])
 {
     if (strlen(request) < 5)
@@ -139,7 +274,6 @@ int check_path_exists(const char *directoryPath)
 
 int remove_files_and_directory(char *path)
 {
-
     if (!check_path_exists(path))
     {
         return -1;
@@ -158,10 +292,59 @@ int remove_files_and_directory(char *path)
     }
 }
 
-int handle_naming_server_commands(char *command, char *inputS)
+int receive_directory(int connfd)
+{
+    while (1)
+    {
+        int err;
+        char buffer[4096];
+        bzero(buffer, sizeof(buffer));
+        int bytesRecv = recv(connfd, buffer, sizeof(buffer), 0);
+
+        if (bytesRecv == -1)
+        {
+            handle_errors("recv");
+        }
+        else if (strcmp(buffer, "END") == 0)
+        {
+            break;
+        }
+        else
+        {
+            send(connfd, "ACK", sizeof("ACK"), 0);
+        }
+
+        char *file_array[3];
+        file_separator(file_array, buffer);
+
+        // adding socket -1 here as I do not wish to deal with copy and any form of sending
+        printf("receieve from server: %s %s\n", file_array[0], file_array[1]);
+        if (strcmp(file_array[0], "file") == 0)
+        {
+            err = handle_naming_server_commands("MKFILE", file_array[1], -1);
+        }
+        else if (strcmp(file_array[0], "dir") == 0)
+        {
+            err = handle_naming_server_commands("MKDIR", file_array[1], -1);
+        }
+        if (err == -1)
+            return -1;
+    }
+
+    return 0;
+}
+
+int handle_naming_server_commands(char *command, char *inputS, int nmfd)
 {
     // Input string
-    if (strcmp("RMDIR", command) != 0 && strcmp("MKFIL", command) != 0 && strcmp("MKDIR", command) != 0)
+    char main_cwd[1000];
+    if (getcwd(main_cwd, sizeof(main_cwd)) == NULL)
+    {
+        handleFileOperationError("getcwd");
+        return -1;
+    }
+
+    if (strcmp("RMDIR", command) != 0 && strcmp("MKFILE", command) != 0 && strcmp("MKDIR", command) != 0 && strcmp("COPYFILE", command) != 0 && strcmp("COPYDIR", command) != 0 && strcmp("RMFILE", command) != 0)
     {
         handleSYSandInputErrors("invalid_input");
         return -1;
@@ -172,14 +355,12 @@ int handle_naming_server_commands(char *command, char *inputS)
     char *lastToken = NULL;
     int count = 0;
 
-    // char cwd[1000];
-
     while (token != NULL)
     {
         if (lastToken != NULL)
         {
             // if it is a make directory or file command, I have to make the previous directories
-            if (!isDirectory(lastToken) && (strcmp(command, "MKFIL") == 0 || strcmp(command, "MKDIR") == 0))
+            if (!isDirectory(lastToken) && (strcmp(command, "MKFILE") == 0 || strcmp(command, "MKDIR") == 0))
             {
                 printf("Creating directory: %s\n", lastToken);
                 int err1 = make_directory(lastToken);
@@ -201,13 +382,10 @@ int handle_naming_server_commands(char *command, char *inputS)
         token = strtok(NULL, "/");
     }
 
-    // getcwd(cwd, sizeof(cwd));
-    // printf("current directory: %s\n", cwd);
     int err3 = 0;
-
     if (lastToken != NULL)
     {
-        if (strcmp(command, "MKFIL") == 0)
+        if (strcmp(command, "MKFILE") == 0)
         {
             err3 = make_file(lastToken);
             if (err3 == -1)
@@ -219,18 +397,35 @@ int handle_naming_server_commands(char *command, char *inputS)
             if (err3 == -1)
                 handleFileOperationError("make_directory");
         }
-        else if (strcmp(command, "RMDIR") == 0)
+        else if (strcmp(command, "RMDIR") == 0 || strcmp(command, "RMFILE") == 0)
         {
             printf("HERE %s\n", lastToken);
             err3 = remove_files_and_directory(lastToken);
             if (err3 == -1)
-                handleFileOperationError("recursive_directory_deletion");
+                handleFileOperationError("remove_files_and_directory");
+        }
+        else if (strcmp(command, "COPYDIR") == 0 || strcmp(command, "COPYFILE") == 0)
+        {
+            //
+            int resp = recursive_directory_sending(lastToken, nmfd);
+            if (resp == -1)
+            {
+                handleFileOperationError("recursive_directory_sending");
+            }
+            send(nmfd, "END", sizeof("END"), 0);
         }
         if (err3 == 0)
         {
-            printf("\e[0;32m%s SUCCESS!\n", command);
+            printf("\e[0;32m%s SUCCESS!\n\e[0;37m", command);
         }
     }
+    int err4 = chdir(main_cwd);
+    if (err4 == -1)
+    {
+        handleFileOperationError("chdir");
+        return -1;
+    }
+
     return err3;
 }
 
@@ -248,6 +443,27 @@ void parse_input(char *array[], char *inputS)
             break;
         }
         array[count] = malloc(sizeof(char) * 100);
+        strcpy(array[count], token);
+        count++;
+        token = strtok(NULL, " ");
+    }
+}
+
+void file_separator(char *array[], char *inputS)
+{
+    char *inputString = strdup(inputS);
+    char *token = strtok(inputString, " ");
+    int count = 0;
+    ;
+
+    while (token != NULL)
+    {
+        if (count == 3)
+        {
+            handleSYSandInputErrors("invalid input");
+            break;
+        }
+        array[count] = malloc(sizeof(char) * 10000);
         strcpy(array[count], token);
         count++;
         token = strtok(NULL, " ");

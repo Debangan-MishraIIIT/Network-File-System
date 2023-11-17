@@ -82,64 +82,6 @@ struct pair server_establish_connection(int PORT)
     return p;
 }
 
-int send_file(char *filename, int sockfd)
-{
-    int fd = open(filename, O_RDONLY);
-    if (fd == -1)
-    {
-        perror("open");
-        return -1;
-    }
-    char buf[MAX_SIZE];
-    ssize_t bytes_read = read(fd, buf, MAX_SIZE);
-    while (bytes_read > 0)
-    {
-        ssize_t resp = write(sockfd, buf, bytes_read);
-        if (resp == -1)
-        {
-            perror("write");
-            return -1;
-        }
-        bzero(buf, MAX_SIZE);
-        bytes_read = read(fd, buf, MAX_SIZE);
-    }
-    if (bytes_read == -1)
-    {
-        perror("read");
-        return -1;
-    }
-    return 0; // Success
-}
-
-int receive_file(int sockfd)
-{
-    int fd = open("temp.txt", O_WRONLY | O_CREAT, 0644);
-    if (fd == -1)
-    {
-        perror("open");
-        return -1;
-    }
-    char buf[MAX_SIZE];
-    ssize_t bytes_read = read(sockfd, buf, MAX_SIZE);
-    while (bytes_read > 0)
-    {
-        ssize_t resp = write(fd, buf, bytes_read);
-        if (resp == -1)
-        {
-            perror("write");
-            return -1;
-        }
-        bzero(buf, MAX_SIZE);
-        bytes_read = read(sockfd, buf, MAX_SIZE);
-    }
-    if (bytes_read == -1)
-    {
-        perror("read");
-        return -1;
-    }
-    return 0; // Success
-}
-
 // added new
 int joinNamingServer(char *ip, int port, char *joinas)
 {

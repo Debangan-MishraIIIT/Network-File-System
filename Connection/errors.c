@@ -62,9 +62,27 @@ void handleFileOperationError(char *error)
 
     if (!strcmp(error, "stat"))
         printf(RED "ERROR 510: UNABLE TO EXTRACT FILE DETAILS (stat)\n" reset);
-    
-     if (!strcmp(error, "no_file"))
+
+    if (!strcmp(error, "no_file"))
         printf(RED "ERROR 511: FILE MISSING (no_file)\n" reset);
+
+    if (!strcmp(error, "getcwd"))
+        printf(RED "ERROR 512: UNABLE TO GET getcwd (getcwd)\n" reset);
+
+    if (!strcmp(error, "open"))
+        printf(RED "ERROR 513: UNABLE TO OPEN FILE (open)\n" reset);
+
+    if (!strcmp(error, "read"))
+        printf(RED "ERROR 514: UNABLE TO READ FILE (read)\n" reset);
+
+    if (!strcmp(error, "write"))
+        printf(RED "ERROR 515: UNABLE TO WRITE FILE (write)\n" reset);
+
+    if (!strcmp(error, "remove_files_and_directory"))
+        printf(RED "ERROR 516: UNABLE DELETE FILE (remove_files_and_directory)\n" reset);
+
+    if (!strcmp(error, "recursive_directory_sending"))
+        printf(RED "ERROR 517: UNABLE TO SEND DIRECTORY (recursive_directory_sending)\n" reset);
 }
 
 // syscall and input errors (all in blue)
