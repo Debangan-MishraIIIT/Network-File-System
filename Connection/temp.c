@@ -1,29 +1,17 @@
 #include <stdio.h>
+#include <libgen.h>
 #include <string.h>
-
-void splitPath(char *inputPath, char *outputParts[2]) {
-    char path[1024];
-    strcpy(path, inputPath);
-
-    char *lastSlash = strrchr(path, '/');
-    if (lastSlash != NULL) {
-        *lastSlash = '\0';
-        outputParts[0] = path;
-        outputParts[1] = lastSlash + 1;
-    } else {
-        outputParts[0] = path;
-        outputParts[1] = NULL; 
-    }
-}
+#include <stdlib.h>
 
 int main() {
-    char path[] = "a/b/c";
-    char *parts[2];
+    const char *originalPath = "a/b/c";
 
-    splitPath(path, parts);
+    char *directoryPath = dirname(strdup(originalPath));
 
-    printf("First Part: %s\n", parts[0]);
-    printf("Second Part: %s\n", parts[1]);
+    printf("Original Path: %s\n", originalPath);
+    printf("Directory Path: %s\n", directoryPath);
+
+    free(directoryPath);  // Remember to free the memory allocated by strdup
 
     return 0;
 }

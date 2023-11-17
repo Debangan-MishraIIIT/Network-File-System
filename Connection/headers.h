@@ -16,6 +16,8 @@
 #include <dirent.h>
 #include <semaphore.h>
 #include <pthread.h>
+//changes
+#include <sys/stat.h>
 
 #include "socket.h"
 #include "api.h"
