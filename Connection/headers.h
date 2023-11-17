@@ -21,11 +21,12 @@
 #include "api.h"
 #include "search.h"
 #include "cache.h"
+#include "errors.h"
 
 #define SA struct sockaddr
 #define MAX_SIZE 1024
 #define maxlen 1000
-void handle_errors(char* error);
+void handle_errors(char *error);
 
 struct pair
 {
@@ -63,7 +64,7 @@ struct accessibleFile
 
 struct record
 {
-    char * path;
+    char *path;
     struct ssDetails *orignalSS;
     char originalPerms[11];
     bool isDir;
@@ -71,6 +72,8 @@ struct record
     struct ssDetails *backupSS1;
     struct ssDetails *backupSS2;
     int size;
+    time_t creationTime;
+    time_t lastModified;
 };
 
 struct fileDetails
@@ -80,4 +83,5 @@ struct fileDetails
     size_t size;
     bool isDir;
 };
+
 #endif

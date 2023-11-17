@@ -31,8 +31,6 @@ int sendRequest(char *input, int sockfd)
 	char request[4096];
 	bzero(request, sizeof(request));
 	strcpy(request, input);
-	// printf("req: %s\nin: %s\n", request, input);
-	// printf(".%d,%d,\n", strlen(request), strlen(input));
 	int bytesSent = send(sockfd, request, strlen(request), 0);
 	if (bytesSent == -1)
 	{
@@ -48,7 +46,6 @@ int sendRequest(char *input, int sockfd)
 	{
 		char buffer[1000];
 		int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
-
 		if (bytesRecv == -1)
 		{
 			handle_errors("recv");
@@ -61,13 +58,11 @@ int sendRequest(char *input, int sockfd)
 		// recieve the storage server details
 		struct ssDetails ss;
 		int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
-
 		if (bytesRecv == -1)
 		{
 			handle_errors("recv");
 		}
 		printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
-
 		int connfd = joinSS(ss);
 		bytesSent = send(connfd, request, sizeof(request), 0);
 		if (bytesSent == -1)
@@ -150,7 +145,7 @@ int main(int argc, char *argv[])
 {
 	if (argc != 2)
 	{
-		printf("Invalid Arguments!\n");
+		handleSYSandInputErrors("invalid_input");
 		exit(0);
 	}
 
@@ -177,12 +172,19 @@ int main(int argc, char *argv[])
 
 		// printf(".%ld.%s.\n", strlen(input), input);
 		int status = sendRequest(input, sockfd);
+		if (status == -2)
+		{
+			handleFileOperationError("no_file");
+			continue;
+		}
+
 		if (status == -1)
 		{
 			printf("NM Disconnected\n");
 			exit(0);
 			break;
 		}
+
 		if (status == 0)
 		{
 			printf("Successful Request \n");

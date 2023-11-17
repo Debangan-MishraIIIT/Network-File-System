@@ -19,6 +19,8 @@ void convertPermissions(mode_t st_mode, char *perms)
 void sendPathToNS(char *path, char perms[11], size_t size, int nmSock)
 {
 	struct fileDetails *det = (struct fileDetails *)malloc(sizeof(struct fileDetails));
+	if (!det)
+		handleSYSandInputErrors("malloc");
 	strcpy(det->path, path);
 	strcpy(det->perms, perms);
 	det->size = size;
@@ -39,6 +41,8 @@ void *take_inputs_dynamically(void *args)
 	{
 		char *path;
 		path = malloc(sizeof(char) * 250);
+		if (!path)
+			handleSYSandInputErrors("malloc");
 		scanf("%s", path);
 		if (check_path_exists(path))
 		{
@@ -47,8 +51,8 @@ void *take_inputs_dynamically(void *args)
 			int r = stat(path, &dirStat);
 			if (r == -1)
 			{
-				fprintf(stderr, "File error\n");
-				exit(1);
+				handleFileOperationError("stat");
+				return NULL;
 			}
 			char perms[11];
 			convertPermissions(dirStat.st_mode, perms);
@@ -61,7 +65,7 @@ void *take_inputs_dynamically(void *args)
 		}
 		else
 		{
-			printf("path does not exist\n");
+			handleFileOperationError("no_path");
 		}
 	}
 	return NULL;
@@ -105,15 +109,16 @@ void *serveNM_Requests(void *args)
 			char main_cwd[1000];
 			if (getcwd(main_cwd, sizeof(main_cwd)) == NULL)
 			{
-				handle_errors("getcwd error");
+				handleFileOperationError("getcwd");
 			}
-			if(chdir(request_path)==-1){
-				handle_errors("chdir");
+			if (chdir(request_path) == -1)
+			{
+				handleFileOperationError("chdir");
 			}
 			resp = receive_directory(nmfd);
 			if (chdir(main_cwd) == -1)
 			{
-				handle_errors("chdir");
+				handleFileOperationError("chdir");
 			}
 		}
 
@@ -140,7 +145,6 @@ void *serveNM_Requests(void *args)
 void *serveClient_Request(void *args)
 {
 	int connfd = *((int *)args);
-	// printf("connfd in ss: %d\n", connfd);
 
 	char buffer[4096];
 	int bytesRecv = recv(connfd, buffer, sizeof(buffer), 0);
@@ -313,7 +317,7 @@ int main(int argc, char *argv[])
 	// int cliPort = 6971;
 	if (argc != 3)
 	{
-		printf("Invalid Arguments!\n");
+		handleSYSandInputErrors("invalid_input");
 		exit(0);
 	}
 	int nmPort = atoi(argv[1]);

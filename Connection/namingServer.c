@@ -24,11 +24,11 @@ struct ssDetails *getRecord(char *path)
     struct record *tableEntry;
     // first check if path exists in cache or not
     tableEntry = searchFileInCache(myCache, path);
-    // printCache(myCache);
     if (tableEntry)
+    {
+        tableEntry->lastModified = time(NULL);
         return tableEntry->orignalSS;
-
-    // printf("LOL!\n");
+    }
 
     tableEntry = search(root, path);
     if (tableEntry)
@@ -36,10 +36,13 @@ struct ssDetails *getRecord(char *path)
         // add the record to cache since it was not present before
         addFile(myCache, tableEntry);
         printf("Record added to cache!\n");
+        tableEntry->lastModified = time(NULL);
         return tableEntry->orignalSS;
     }
     else
+    {
         return NULL;
+    }
 }
 
 void sendRequestToSS(struct ssDetails *ss, char *request)
@@ -137,7 +140,6 @@ void *acceptClientRequests(void *args)
         if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0)
         {
             sendRequestToSS(ss, request);
-
             char buffer[1000];
             int bytesRecv = recv(ss->connfd, buffer, sizeof(buffer), 0);
             printf("receieve from server: %s\n", buffer);
@@ -177,7 +179,7 @@ void *acceptClientRequests(void *args)
             int resp = recursive_directory_sending(lastToken, ss2->connfd);
             if (resp == -1)
             {
-                handle_errors("recursive directory sending");
+                handleFileOperationError("recursive_directory_sending");
             }
             send(ss2->connfd, "END", sizeof("END"), 0);
         }
@@ -375,7 +377,7 @@ int main(int argc, char *argv[])
     // int port = 6969;
     if (argc != 2)
     {
-        printf("Invalid Arguments!\n");
+        handleSYSandInputErrors("invalid_input");
         exit(0);
     }
     int port = atoi(argv[1]);
