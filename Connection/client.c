@@ -29,43 +29,53 @@ int sendRequest(char *input, int sockfd)
 {
 	// send request
 	char request[4096];
+	bzero(request, sizeof(request));
 	strcpy(request, input);
 	// printf("req: %s\nin: %s\n", request, input);
 	// printf(".%d,%d,\n", strlen(request), strlen(input));
 	int bytesSent = send(sockfd, request, strlen(request), 0);
 	if (bytesSent == -1)
 	{
-		perror("send");
-	}
-	if (bytesSent == 0)
-	{
-		// nm has disconnected
-		return -1;
+		handle_errors("send");
 	}
 
-	// printf("here");
-	// recieve the storage server details
-	struct ssDetails ss;
-	int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
-	if (bytesRecv == -1)
-	{
-		perror("recv");
-	}
-	if (bytesRecv == 0)
-	{
-		return -1;
-	}
+	char *arg_arr[2];
+	parse_input(arg_arr, input);
+	char *request_command = arg_arr[0];
 
-	printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
-
-	int connfd = joinSS(ss);
-	bytesSent = send(connfd, request, sizeof(request), 0);
-	if (bytesSent == -1)
+	if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0
+			 || strcmp(request_command, "COPYDIR") == 0  || strcmp(request_command, "COPYFILE") == 0)
 	{
-		perror("recv");
+		char buffer[1000];
+		int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
+
+		if (bytesRecv == -1)
+		{
+			handle_errors("recv");
+		}
+		printf("Recieved from NM\n%s\n\n", buffer);
 	}
-	printf("\'%s\' sent to SS %s:%d\n", request, ss.ip, ss.cliPort);
-	return 0;
+	else
+	{
+		// printf("here");
+		// recieve the storage server details
+		struct ssDetails ss;
+		int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
+
+		if (bytesRecv == -1)
+		{
+			handle_errors("recv");
+		}
+		printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
+
+		int connfd = joinSS(ss);
+		bytesSent = send(connfd, request, sizeof(request), 0);
+		if (bytesSent == -1)
+		{
+			handle_errors("recv");
+		}
+		printf("\'%s\' sent to SS %s:%d\n", request, ss.ip, ss.cliPort);
+	}
 }
 
 int joinNamingServerAsClient(char *ip, int port)

@@ -70,23 +70,69 @@ void *take_inputs_dynamically(void *args)
 void *serveNM_Requests(void *args)
 {
 	int nmfd = *((int *)args);
-	// printf("nmfd in ss: %d\n", nmfd);
+	char err_message[1000];
 	while (1)
 	{
 		char buffer[4096];
+		bzero(buffer, sizeof(buffer));
+
 		int bytesRecv = recv(nmfd, buffer, sizeof(buffer), 0);
 		if (bytesRecv == -1)
 		{
-			perror("recv");
+			handle_errors("recv");
 		}
 		if (bytesRecv == 0)
 		{
-			printf("NM disconnected\n");
-			exit(0);
 			break;
 		}
 
 		printf("Recieved from NM: %s\n", buffer);
+		char *argument_array[2];
+		parse_input(argument_array, buffer);
+		char *request_command = argument_array[0];
+		char *request_path = argument_array[1];
+
+		printf("command:%s\npath:%s\n", request_command, request_path);
+
+		int resp;
+
+		if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPYFILE") == 0 || strcmp(request_command, "COPYDIR") == 0)
+		{
+			resp = handle_naming_server_commands(request_command, request_path, nmfd);
+		}
+		else if (strcmp(request_command, "RECDIR") == 0)
+		{
+			char main_cwd[1000];
+			if (getcwd(main_cwd, sizeof(main_cwd)) == NULL)
+			{
+				handle_errors("getcwd error");
+			}
+			if(chdir(request_path)==-1){
+				handle_errors("chdir");
+			}
+			resp = receive_directory(nmfd);
+			if (chdir(main_cwd) == -1)
+			{
+				handle_errors("chdir");
+			}
+		}
+
+		if (resp == -1)
+		{
+			strcpy(err_message, "ERROR IN EXECUTION");
+		}
+		else
+		{
+			strcpy(err_message, "SUCCESS IN EXECUTION");
+		}
+		printf("sending: %s\n", err_message);
+		int bytesSend = send(nmfd, err_message, strlen(err_message), 0);
+		if (bytesSend == -1)
+		{
+			handle_errors("send");
+		}
+		printf("sent\n");
+		bzero(err_message, sizeof(err_message));
 	}
 	return NULL;
 }
@@ -102,7 +148,7 @@ void *serveClient_Request(void *args)
 	{
 		perror("recv");
 	}
-	
+
 	printf("Recieved from client: %s\n", buffer);
 	return NULL;
 }
@@ -275,7 +321,7 @@ int main(int argc, char *argv[])
 	printf("NMPORT: %d, CLIPORT:%d\n", nmPort, cliPort);
 	int cliSock = initialzeClientsConnection(cliPort);
 	int nmSock1 = initializeNMConnection("127.0.0.1", 6969, nmPort, cliPort); // for feedback transfer
-	int nmSock2 = initializeNMConnectionForRecords("127.0.0.1", 6969); // for records
+	int nmSock2 = initializeNMConnectionForRecords("127.0.0.1", 6969);		  // for records
 
 	pthread_t nmThread, clientsThread, inputThread;
 	pthread_create(&nmThread, NULL, serveNM_Requests, (void *)&nmSock1);
