@@ -41,17 +41,11 @@ int sendRequest(char *input, int sockfd)
 	parse_input(arg_arr, input);
 	char *request_command = arg_arr[0];
 
-	if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)
+	if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0
+			 || strcmp(request_command, "COPYDIR") == 0  || strcmp(request_command, "COPYFILE") == 0)
 	{
 		char buffer[1000];
-		bzero(buffer, sizeof(buffer));
 		int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
-
-		if (!strcmp(buffer, "error"))
-		{
-			return -2;
-		}
-
 		if (bytesRecv == -1)
 		{
 			handle_errors("recv");
@@ -64,24 +58,11 @@ int sendRequest(char *input, int sockfd)
 		// recieve the storage server details
 		struct ssDetails ss;
 		int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
-
 		if (bytesRecv == -1)
 		{
-			perror("recv");
-			return -2;
+			handle_errors("recv");
 		}
-
-		if (bytesRecv == 0)
-		{
-			return -1;
-		}
-		if (ss.id == -1)
-		{
-			return -2;
-		}
-
 		printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
-
 		int connfd = joinSS(ss);
 		bytesSent = send(connfd, request, sizeof(request), 0);
 		if (bytesSent == -1)

@@ -47,7 +47,7 @@ struct ssDetails *getRecord(char *path)
 
 void sendRequestToSS(struct ssDetails *ss, char *request)
 {
-    int bytesSent = send(ss->connfd, request, sizeof(request), 0);
+    int bytesSent = send(ss->connfd, request, strlen(request), 0);
     if (bytesSent == -1)
     {
         perror("send");
@@ -104,9 +104,7 @@ struct ssDetails *find_final_path(char *path)
             return ss;
         }
     }
-    ss = malloc(sizeof(struct ssDetails));
-    ss->id = -1;
-    return ss;
+    return NULL;
 }
 
 void *acceptClientRequests(void *args)
@@ -136,31 +134,19 @@ void *acceptClientRequests(void *args)
         // changes starting here
         // handle null values here
         struct ssDetails *ss = find_final_path(request_path);
-        if (ss->id == -1)
-        {
-            char buffer[1000];
-            strcpy(buffer, "error");
-            int bytesSent = send(cli->connfd, buffer, sizeof(buffer), 0);
-            if (bytesSent == -1)
-            {
-                handle_errors("send");
-            }
-            continue;
-        }
         printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
 
         // if privileged
         if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0)
         {
             sendRequestToSS(ss, request);
-
             char buffer[1000];
-            bzero(buffer, sizeof(buffer));
             int bytesRecv = recv(ss->connfd, buffer, sizeof(buffer), 0);
             printf("receieve from server: %s\n", buffer);
 
             int bytesSent = send(cli->connfd, buffer, sizeof(buffer), 0);
             printf("sent execution to client\n");
+            bzero(buffer, sizeof(buffer));
         }
         else if (strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)
         {
@@ -170,11 +156,9 @@ void *acceptClientRequests(void *args)
 
             // acknowledgement window not opened
             char buffer[1000];
-            bzero(buffer, sizeof(buffer));
             int bytesRecv = recv(ss->connfd, buffer, sizeof(buffer), 0);
             printf("receieve from server: %s\n", buffer);
 
-            bzero(buffer, sizeof(buffer));
             int bytesSent = send(cli->connfd, buffer, sizeof(buffer), 0);
             printf("sent execution to client\n");
             bzero(buffer, sizeof(buffer));

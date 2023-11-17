@@ -1,27 +1,22 @@
 #include <stdio.h>
 #include <string.h>
 
-void splitPath(char *inputPath, char *outputParts[2])
-{
+void splitPath(char *inputPath, char *outputParts[2]) {
     char path[1024];
     strcpy(path, inputPath);
 
     char *lastSlash = strrchr(path, '/');
-    if (lastSlash != NULL)
-    {
+    if (lastSlash != NULL) {
         *lastSlash = '\0';
         outputParts[0] = path;
         outputParts[1] = lastSlash + 1;
-    }
-    else
-    {
+    } else {
         outputParts[0] = path;
-        outputParts[1] = NULL;
+        outputParts[1] = NULL; 
     }
 }
 
-int main()
-{
+int main() {
     char path[] = "a/b/c";
     char *parts[2];
 

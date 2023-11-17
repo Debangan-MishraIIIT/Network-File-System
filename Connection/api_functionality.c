@@ -61,7 +61,6 @@ int receive_file(char *filename, int sockfd)
     if (bytes_read == -1)
     {
         handleSYSandInputErrors("read");
-
         return -1;
     }
     return 0; // Success
@@ -288,7 +287,6 @@ int remove_files_and_directory(char *path)
         {
             remove(path);
         }
-        return 0;
     }
 }
 
@@ -365,6 +363,10 @@ int handle_naming_server_commands(char *command, char *inputS, int nmfd)
                 printf("Creating directory: %s\n", lastToken);
                 int err1 = make_directory(lastToken);
                 if (err1 == -1)
+                    handle_errors("make_directory");
+            }
+            else if (!isDirectory(lastToken) && strcmp(command, "RMDIR") == 0)
+            {
                     handleFileOperationError("make_directory");
             }
             else if (!isDirectory(lastToken) && strcmp(command, "RMDIR") == 0)
@@ -437,7 +439,7 @@ void parse_input(char *array[], char *inputS)
 
     while (token != NULL)
     {
-        if (count == 2)
+        if (count >= 3)
         {
             handleSYSandInputErrors("invalid_input");
             break;
