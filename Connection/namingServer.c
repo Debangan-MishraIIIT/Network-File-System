@@ -127,6 +127,7 @@ void *acceptClientRequests(void *args)
         parse_input(argument_array, request);
         char *request_command = argument_array[0];
         char *request_path = argument_array[1];
+        printf("arg_arr %s and request %s\n", request_path, request);
 
         // changes starting here
         // handle null values here
@@ -166,20 +167,27 @@ void *acceptClientRequests(void *args)
             char *temparr[2];
             splitPath(request_path, temparr);
             char *lastToken = temparr[1];
+            printf("temp_arr -- %s %s\n", temparr[0], temparr[1]);
+
             char send_buffer[1000];
+            char *tempCopy = malloc(sizeof(char) * 1000);
+            strcpy(tempCopy, temparr[1]);
             char *final_path = argument_array[2];
+            bzero(send_buffer, sizeof(send_buffer));
             snprintf(send_buffer, sizeof(send_buffer), "RECDIR %s", final_path);
-            printf("%s\n", final_path);
+
             struct ssDetails *ss2 = find_final_path(final_path);
             printf("SS recipient Details: %s:%d\n", ss2->ip, ss2->cliPort);
             sendRequestToSS(ss2, send_buffer);
 
-            int resp = recursive_directory_sending(lastToken, ss2->connfd);
+            int resp = recursive_directory_sending(tempCopy, ss2->connfd);
             if (resp == -1)
             {
                 handle_errors("recursive directory sending");
             }
+
             send(ss2->connfd, "END", sizeof("END"), 0);
+            resp = recursive_directory_deletion(tempCopy);
         }
         // not privileged
         else

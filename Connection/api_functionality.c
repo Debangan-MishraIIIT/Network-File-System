@@ -158,6 +158,7 @@ int recursive_directory_deletion(char *curr_address)
 
 int recursive_directory_sending(char *curr_address, int nmfd)
 {
+    printf("opening %s\n", curr_address);
     DIR *dir = opendir(curr_address);
     if (dir == NULL)
     {
@@ -402,6 +403,7 @@ int handle_naming_server_commands(char *command, char *inputS, int nmfd)
         else if (strcmp(command, "COPYDIR") == 0 || strcmp(command, "COPYFILE") == 0)
         {
             //
+            printf("last token 2: %s\n", lastToken);
             int resp = recursive_directory_sending(lastToken, nmfd);
             if (resp == -1)
             {
