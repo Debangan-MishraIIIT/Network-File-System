@@ -145,7 +145,6 @@ void *serveNM_Requests(void *args)
 void *serveClient_Request(void *args)
 {
 	int connfd = *((int *)args);
-	// printf("connfd in ss: %d\n", connfd);
 
 	char buffer[4096];
 	int bytesRecv = recv(connfd, buffer, sizeof(buffer), 0);
