@@ -47,6 +47,12 @@ int sendRequest(char *input, int sockfd)
 	// recieve the storage server details
 	struct ssDetails ss;
 	int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
+	if (ss.id <= 0)
+	{
+		// nm has disconnected
+		return -1;
+	}
+
 	if (bytesRecv == -1)
 	{
 		perror("recv");
@@ -108,7 +114,7 @@ int joinNamingServerAsClient(char *ip, int port)
 	{
 		return -1;
 	}
-	printf("Client connected to naming server.\n");
+	// printf("Client connected to naming server.\n");
 
 	return sockfd;
 }
@@ -125,11 +131,12 @@ void *isNMConnected(void *args)
 
 		if (ret == 0 && error == 0)
 		{
+			sleep(1);
 			continue;
 		}
 		else
 		{
-			printf("NM Disconnected\n");
+			printf(RED_COLOR "[-] Naming Server has disconnected!\n" RESET_COLOR);
 			exit(0);
 		}
 	}
@@ -140,13 +147,14 @@ int main(int argc, char *argv[])
 {
 	if (argc != 2)
 	{
-		printf("Invalid Arguments!\n");
+		printf(RED_COLOR "[-] Invalid Arguments!\n" RESET_COLOR);
 		exit(0);
 	}
 
 	int namingServerPort = atoi(argv[1]);
 	// int namingServerPort = 6969;
 	int sockfd = joinNamingServerAsClient("127.0.0.1", namingServerPort);
+	printf(GREEN_COLOR "[+] Client connected to Naming Server\n" RESET_COLOR);
 
 	pthread_t disconnectionThread;
 	pthread_create(&disconnectionThread, NULL, isNMConnected, &sockfd);
@@ -169,7 +177,7 @@ int main(int argc, char *argv[])
 		int status = sendRequest(input, sockfd);
 		if (status == -1)
 		{
-			printf("NM Disconnected\n");
+			printf(RED_COLOR "[-] Naming Server has disconnected!\n" RESET_COLOR);
 			exit(0);
 			break;
 		}

@@ -16,11 +16,14 @@
 #include <dirent.h>
 #include <semaphore.h>
 #include <pthread.h>
+#include <assert.h>
 
 #include "socket.h"
 #include "api.h"
 #include "search.h"
 #include "cache.h"
+#include "colors.h"
+#include "errors.h"
 
 #define SA struct sockaddr
 #define MAX_SIZE 1024
@@ -70,7 +73,7 @@ struct record
     char currentPerms[11]; // for backup
     struct ssDetails *backupSS1;
     struct ssDetails *backupSS2;
-    int size;
+    size_t size;
 };
 
 struct fileDetails

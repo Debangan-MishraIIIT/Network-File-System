@@ -13,12 +13,12 @@ client%:
 
 storageServer:
 	gcc storageServer.c socket_functionality.c api_functionality.c errors.c -o storageServer -pthread
-	./storageServer $(SS_PORTS) $$((1  + $(SS_PORTS)))
+	./storageServer $(NM_PORT) $(SS_PORTS) $$((1  + $(SS_PORTS)))
 	rm storageServer
 
 storageServer%: 
 	gcc storageServer.c socket_functionality.c api_functionality.c errors.c -o $@ -pthread
-	./$@ $$(($(subst storageServer,,$@) * 2 + $(SS_PORTS))) $$(($(subst storageServer,,$@) * 2 + 1  + $(SS_PORTS)))
+	./$@ $(NM_PORT) $$(($(subst storageServer,,$@) * 2 + $(SS_PORTS))) $$(($(subst storageServer,,$@) * 2 + 1  + $(SS_PORTS)))
 	rm $@
 
 namingServer:

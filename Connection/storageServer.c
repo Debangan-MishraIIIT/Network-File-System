@@ -27,23 +27,32 @@ void sendPathToNS(char *path, char perms[11], size_t size, int nmSock)
 	int bytesSent = send(nmSock, det, sizeof(struct fileDetails), 0);
 	if (bytesSent == -1)
 	{
-		perror("send");
+		handleNetworkErrors("send");
 	}
-	printf("File detials sent to SS\n");
+	printf(BLUE_COLOR"Added %s as an accessible path\n"RESET_COLOR, path);
 }
 
-void *take_inputs_dynamically(void *args)
+void *takeInputsDynamically(void *args)
 {
 	int nmSock = *(int *)(args);
 	while (1)
 	{
-		char *path;
-		path = malloc(sizeof(char) * 250);
-		scanf("%s", path);
+		// char *path;
+		// path = malloc(sizeof(char) * 4096);
+		// scanf("%s", path);
+		char input[4096];
+		fgets(input, 4096, stdin);
+		char * token = strtok(input, " \t\n");
+		if (strcmp(token, "ADD"))
+		{
+			printf(RED_COLOR"Invalid Syntax!\n"RESET_COLOR);
+			continue;
+		}
+		char * path = strtok(NULL, " \n");
 		if (check_path_exists(path))
 		{
 			struct stat dirStat;
-			printf("path exists\n");
+			// printf("path exists\n");
 			int r = stat(path, &dirStat);
 			if (r == -1)
 			{
@@ -53,9 +62,9 @@ void *take_inputs_dynamically(void *args)
 			char perms[11];
 			convertPermissions(dirStat.st_mode, perms);
 			size_t size = dirStat.st_size;
-			printf("path: %s\n", path);
-			printf("Permission bits: %s\n", perms);
-			printf("Size: %zu bytes\n", size);
+			// printf("path: %s\n", path);
+			// printf("Permission bits: %s\n", perms);
+			// printf("Size: %zu bytes\n", size);
 			sendPathToNS(path, perms, size, nmSock);
 			// send path to NS
 		}
@@ -77,11 +86,13 @@ void *serveNM_Requests(void *args)
 		int bytesRecv = recv(nmfd, buffer, sizeof(buffer), 0);
 		if (bytesRecv == -1)
 		{
-			perror("recv");
+			handleNetworkErrors("recv");
+			// perror("recv");
+			break;
 		}
 		if (bytesRecv == 0)
 		{
-			printf("NM disconnected\n");
+			printf(RED_COLOR "[-] Naming Server has disconnected!\n" RESET_COLOR);
 			exit(0);
 			break;
 		}
@@ -100,9 +111,10 @@ void *serveClient_Request(void *args)
 	int bytesRecv = recv(connfd, buffer, sizeof(buffer), 0);
 	if (bytesRecv == -1)
 	{
-		perror("recv");
+		// perror("recv");
+		handleNetworkErrors("recv");
 	}
-	
+
 	printf("Recieved from client: %s\n", buffer);
 	return NULL;
 }
@@ -117,8 +129,9 @@ void *acceptClients(void *args)
 		int connfd = accept(sockfd, (struct sockaddr *)&cli, &len);
 		if (connfd < 0)
 		{
-			perror("accept");
-			exit(EXIT_FAILURE);
+			// perror("accept");
+			handleNetworkErrors("accept");
+			exit(0);
 		}
 		pthread_t serveClientThread;
 		pthread_create(&serveClientThread, NULL, serveClient_Request, &connfd);
@@ -134,7 +147,8 @@ int initializeNMConnection(char *ip, int port, int nmPort, int cliPort)
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1)
 	{
-		perror("socket");
+		// perror("socket");
+		handleNetworkErrors("socket");
 		exit(0);
 	}
 	bzero(&servaddr, sizeof(servaddr));
@@ -153,13 +167,14 @@ int initializeNMConnection(char *ip, int port, int nmPort, int cliPort)
 
 	if ((bind(sockfd, (SA *)&cliaddr, sizeof(cliaddr))) != 0)
 	{
-		perror("bind");
+		handleNetworkErrors("bind");
+		// perror("bind");
 		exit(0);
 	}
 
 	if (connect(sockfd, (SA *)&servaddr, sizeof(servaddr)) != 0)
 	{
-		perror("connect");
+		handleNetworkErrors("connect");
 		exit(0);
 	}
 
@@ -167,19 +182,18 @@ int initializeNMConnection(char *ip, int port, int nmPort, int cliPort)
 	int bytesSent = send(sockfd, joinMsg, sizeof(joinMsg), 0);
 	if (bytesSent == -1)
 	{
-		perror("send");
+		handleNetworkErrors("send");
 	}
 	char buffer[4096];
 	int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
 	if (bytesRecv == -1)
 	{
-		perror("recv");
+		handleNetworkErrors("recv");
 	}
 	if (strcmp(buffer, "ACCEPTED JOIN") != 0)
 	{
 		return -1;
 	}
-	printf("SS connected to naming server.\n");
 
 	// initialize detials
 	struct ssDetails details;
@@ -197,7 +211,6 @@ int initializeNMConnection(char *ip, int port, int nmPort, int cliPort)
 	{
 		perror("send");
 	}
-	printf("SS detials sent to NM.\n");
 
 	return sockfd;
 }
@@ -210,7 +223,7 @@ int initializeNMConnectionForRecords(char *ip, int port)
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1)
 	{
-		perror("socket");
+		handleNetworkErrors("socket");
 		exit(0);
 	}
 	bzero(&servaddr, sizeof(servaddr));
@@ -221,7 +234,7 @@ int initializeNMConnectionForRecords(char *ip, int port)
 
 	if (connect(sockfd, (SA *)&servaddr, sizeof(servaddr)) != 0)
 	{
-		perror("connect");
+		handleNetworkErrors("connect");
 		exit(0);
 	}
 
@@ -237,7 +250,7 @@ int initialzeClientsConnection(int port)
 
 	if (sockfd == -1)
 	{
-		perror("socket");
+		handleNetworkErrors("socket");
 		exit(0);
 	}
 	bzero(&servaddr, sizeof(servaddr));
@@ -252,11 +265,14 @@ int initialzeClientsConnection(int port)
 
 	if ((bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) != 0)
 	{
-		perror("bind");
+		// perror("bind");
+		handleNetworkErrors("bind");
 		exit(0);
 	}
 	if (listen(sockfd, 12) != 0)
-		perror("listen");
+	{
+		handleNetworkErrors("listen");
+	}
 
 	return sockfd;
 }
@@ -265,22 +281,28 @@ int main(int argc, char *argv[])
 {
 	// int nmPort = 6970;
 	// int cliPort = 6971;
-	if (argc != 3)
+	if (argc != 4)
 	{
-		printf("Invalid Arguments!\n");
+		printf(RED_COLOR "[-] Invalid Arguments!\n" RESET_COLOR);
 		exit(0);
 	}
-	int nmPort = atoi(argv[1]);
-	int cliPort = atoi(argv[2]);
-	printf("NMPORT: %d, CLIPORT:%d\n", nmPort, cliPort);
+	int mainPort = atoi(argv[1]);
+	int nmPort = atoi(argv[2]);
+	int cliPort = atoi(argv[3]);
+	// printf("NMPORT: %d, CLIPORT:%d\n", nmPort, cliPort);
 	int cliSock = initialzeClientsConnection(cliPort);
-	int nmSock1 = initializeNMConnection("127.0.0.1", 6969, nmPort, cliPort); // for feedback transfer
-	int nmSock2 = initializeNMConnectionForRecords("127.0.0.1", 6969); // for records
+	printf(GREEN_COLOR "[+] Storage Server Initialized\n" RESET_COLOR);
+
+	int nmSock1 = initializeNMConnection("127.0.0.1", mainPort, nmPort, cliPort); // for feedback transfer
+	int nmSock2 = initializeNMConnectionForRecords("127.0.0.1", mainPort);		  // for records
+
+	printf(GREEN_COLOR "[+] Connected to Naming Server\n" RESET_COLOR);
+	printf(YELLOW_COLOR "Port For NM Communication: %d\nPort for Client Communication: %d\n" RESET_COLOR, nmPort, cliPort);
 
 	pthread_t nmThread, clientsThread, inputThread;
 	pthread_create(&nmThread, NULL, serveNM_Requests, (void *)&nmSock1);
 	pthread_create(&clientsThread, NULL, acceptClients, (void *)&cliSock);
-	pthread_create(&inputThread, NULL, take_inputs_dynamically, (void *)&nmSock2);
+	pthread_create(&inputThread, NULL, takeInputsDynamically, (void *)&nmSock2);
 
 	pthread_join(inputThread, NULL);
 	pthread_join(nmThread, NULL);

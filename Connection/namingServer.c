@@ -1,7 +1,5 @@
 #include "headers.h"
 
-// TODO: to be modified to a more efficient (non restrictive) method of storage. Implementing simple array for now
-
 struct ssDetails storageServers[10000];
 bool validSS[10000];
 int storageServerCount = 0;
@@ -17,6 +15,8 @@ int clientCount = 0;
 TrieNode *root;
 LRUCache *myCache;
 
+pthread_mutex_t hostLock;
+pthread_mutex_t recordsLock;
 int nmSock;
 
 struct ssDetails *getRecord(char *path)
@@ -47,7 +47,7 @@ void sendRequestToSS(struct ssDetails *ss, char *request)
     int bytesSent = send(ss->connfd, request, sizeof(request), 0);
     if (bytesSent == -1)
     {
-        perror("send");
+        handleNetworkErrors("send");
     }
 }
 
@@ -62,13 +62,16 @@ void *acceptClientRequests(void *args)
         int bytesRecv = recv(cli->connfd, request, sizeof(request), 0);
         if (bytesRecv == -1)
         {
-            // perror("recv");
+            handleNetworkErrors("recv");
             break;
         }
         if (bytesRecv == 0)
         {
-            // clinent disconnects
-            printf("Client %d Disconnected\n", cli->id);
+            // client disconnects
+            validCli[cli->id] = false;
+            printf(RED_COLOR "[-] Client %d has disconnected!\n" RESET_COLOR, cli->id);
+
+            close(cli->connfd);
             break;
         }
 
@@ -84,7 +87,7 @@ void *acceptClientRequests(void *args)
         int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
         if (bytesSent == -1)
         {
-            perror("send");
+            handleNetworkErrors("send");
         }
 
         printf("sent ss detials to client\n");
@@ -102,15 +105,19 @@ void *addToRecord(void *args)
         int bytesRecv = recv(ss->addPathfd, &det, sizeof(det), 0);
         if (bytesRecv == -1)
         {
-            perror("recv");
+            handleNetworkErrors("recv");
             break;
         }
         if (bytesRecv == 0)
         {
             // ss disconnects
-            printf("SS %d Disconnected\n", ss->id);
+            validSS[ss->id] = false;
+            close(ss->connfd);
+            close(ss->addPathfd);
+            printf(RED_COLOR "[-] Storage Server %d has disconnected!\n" RESET_COLOR, ss->id);
             break;
         }
+        pthread_mutex_lock(&recordsLock);
         int i = recordCount;
 
         records[i].size = det.size;
@@ -124,8 +131,11 @@ void *addToRecord(void *args)
         records[i].path = malloc(sizeof(char) * 4096);
         strcpy(records[i].path, det.path);
 
+        printf(BLUE_COLOR"Added %s as accessible path in Storage Server %d\nPermissions: %s\n"RESET_COLOR, records[i].path, records[i].orignalSS->id, records[i].originalPerms);
+
         insertRecordToTrie(root, &records[i]);
         recordCount++;
+        pthread_mutex_unlock(&recordsLock);
     }
 
     return NULL;
@@ -133,24 +143,23 @@ void *addToRecord(void *args)
 
 void addClient(int connfd)
 {
-    while (validSS[clientCount])
+    while (validCli[clientCount + 1])
     {
         clientCount++;
         clientCount %= 10000;
     }
     clientDetails[clientCount].connfd = connfd;
     clientDetails[clientCount].id = clientCount + 1;
-    clientCount++;
-    clientCount %= 10000;
+    validCli[clientCount + 1] = true;
 
-    printf("Client Joined\n");
+    printf(YELLOW_COLOR "[+] Client %d Joined\n" RESET_COLOR, clientDetails[clientCount].id);
 
-    pthread_create(&clientThreads[clientCount - 1], NULL, acceptClientRequests, &clientDetails[clientCount - 1]);
+    pthread_create(&clientThreads[clientCount], NULL, acceptClientRequests, &clientDetails[clientCount]);
 }
 
 void addStorageServer(int connfd)
 {
-    while (validSS[storageServerCount])
+    while (validSS[storageServerCount + 1])
     {
         storageServerCount++;
         storageServerCount %= 10000;
@@ -160,43 +169,43 @@ void addStorageServer(int connfd)
     int bytesRecv = recv(connfd, &storageServers[storageServerCount], sizeof(storageServers[storageServerCount]), 0);
     if (bytesRecv == -1)
     {
-        perror("recv");
+        // perror("recv");
+        handleNetworkErrors("recv");
         return;
     }
     storageServers[storageServerCount].connfd = connfd;
     storageServers[storageServerCount].id = storageServerCount + 1;
+    validSS[storageServerCount + 1] = true;
 
-     // create a new sockfd for adding paths dynamically
+    // create a new sockfd for adding paths dynamically
     struct sockaddr_in cli;
     socklen_t len = sizeof(cli);
     connfd = accept(nmSock, (struct sockaddr *)&cli, &len);
     if (connfd < 0)
     {
-        perror("accept");
+        // perror("accept");
+        handleNetworkErrors("accept");
         exit(EXIT_FAILURE);
     }
 
     storageServers[storageServerCount].addPathfd = connfd;
 
-    storageServerCount++;
-    storageServerCount %= 10000;
-
-    printf("SS Joined %s:%d %d\n", storageServers[storageServerCount - 1].ip, storageServers[storageServerCount - 1].cliPort, storageServers[storageServerCount - 1].nmPort);
+    printf(YELLOW_COLOR "[+] Storage Server %d Joined from %s:%d\n    Port for Client Communication: %d\n" RESET_COLOR, storageServers[storageServerCount].id, storageServers[storageServerCount].ip, storageServers[storageServerCount].nmPort, storageServers[storageServerCount].cliPort);
 
     pthread_t addpathThread;
-    pthread_create(&addpathThread, NULL, addToRecord, (void *)&storageServers[storageServerCount - 1]);
-    // TODO: add storage server disconnection message
+    pthread_create(&addpathThread, NULL, addToRecord, (void *)&storageServers[storageServerCount]);
 }
 
 void *acceptHost(void *args)
 {
     int sockfd = *((int *)args);
     // need to change limit
-    if (listen(sockfd, 12) == 0)
-        printf("Listening...\n");
-    else
-        printf("Error\n");
-
+    if (listen(sockfd, 12) != 0)
+    {
+        // printf(RED_COLOR "Error in listen\n" RESET_COLOR);
+        handleNetworkErrors("listen");
+        exit(0);
+    }
     struct sockaddr_in cli;
     socklen_t len = sizeof(cli);
     while (1)
@@ -204,31 +213,38 @@ void *acceptHost(void *args)
         int connfd = accept(sockfd, (struct sockaddr *)&cli, &len);
         if (connfd < 0)
         {
-            perror("accept");
-            exit(EXIT_FAILURE);
+            // perror("accept");
+            handleNetworkErrors("accept");
+            exit(0);
         }
         char buffer[4096];
         bzero(buffer, sizeof(buffer));
         int bytesRecv = recv(connfd, buffer, sizeof(buffer), 0);
         if (bytesRecv == -1)
         {
-            perror("recv");
+            handleNetworkErrors("recv");
+            // perror("recv");
         }
 
         char joinAcceptedMsg[100] = "ACCEPTED JOIN";
         int bytesSent = send(connfd, joinAcceptedMsg, sizeof(joinAcceptedMsg), 0);
         if (bytesSent == -1)
         {
-            perror("send");
+            handleNetworkErrors("send");
+            // perror("send");
         }
 
         if (strcmp(buffer, "JOIN_AS Storage Server") == 0)
         {
+            pthread_mutex_lock(&hostLock);
             addStorageServer(connfd);
+            pthread_mutex_unlock(&hostLock);
         }
         if (strcmp(buffer, "JOIN_AS Client") == 0)
         {
+            pthread_mutex_lock(&hostLock);
             addClient(connfd);
+            pthread_mutex_unlock(&hostLock);
         }
     }
     return NULL;
@@ -243,7 +259,8 @@ int initializeNamingServer(int port)
 
     if (sockfd == -1)
     {
-        perror("socket");
+        // perror("socket");
+        handleNetworkErrors("socket");
         exit(0);
     }
     bzero(&servaddr, sizeof(servaddr));
@@ -258,9 +275,11 @@ int initializeNamingServer(int port)
 
     if ((bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) != 0)
     {
-        perror("bind");
+        // perror("bind");
+        handleNetworkErrors("bind");
         exit(0);
     }
+    printf(GREEN_COLOR "[+] Naming Server Initialized\n" RESET_COLOR);
 
     return sockfd;
 }
@@ -270,7 +289,7 @@ int main(int argc, char *argv[])
     // int port = 6969;
     if (argc != 2)
     {
-        printf("Invalid Arguments!\n");
+        printf(RED_COLOR "[-] Invalid Arguments!\n" RESET_COLOR);
         exit(0);
     }
     int port = atoi(argv[1]);
@@ -283,16 +302,16 @@ int main(int argc, char *argv[])
         validCli[i] = false;
         validSS[i] = false;
     }
+    int rc = pthread_mutex_init(&hostLock, NULL);
+    assert(rc == 0);
+    pthread_mutex_init(&recordsLock, NULL);
+    assert(rc == 0);
 
     pthread_t acceptHostThread;
     pthread_create(&acceptHostThread, NULL, acceptHost, &nmSock);
 
     // accpeting server and clinet are infine loops and continue till naming server terminated
     pthread_join(acceptHostThread, NULL);
-    for (int i = 0; i < clientCount; i++)
-    {
-        pthread_join(clientThreads[i], NULL);
-    }
 
     freeCache(myCache);
     return 0;
