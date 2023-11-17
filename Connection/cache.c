@@ -17,6 +17,11 @@ bool isCacheFull(LRUCache *myCache)
 LRUCache *initCache()
 {
     LRUCache *myCache = (LRUCache *)malloc(sizeof(LRUCache));
+    if (!myCache)
+    {
+        handleSYSandInputErrors("malloc");
+        return NULL;
+    }
     myCache->head = NULL;
     myCache->tail = NULL;
     myCache->numFiles = 0;
@@ -38,6 +43,11 @@ void printCache(LRUCache *myCache)
 cacheCell *createCacheCell(struct record *newTableEntry)
 {
     cacheCell *newNode = (cacheCell *)malloc(sizeof(cacheCell));
+    if (!newNode)
+    {
+        handleSYSandInputErrors("malloc");
+        return NULL;
+    }
     newNode->tableEntry = newTableEntry;
     newNode->next = NULL;
     newNode->prev = NULL;

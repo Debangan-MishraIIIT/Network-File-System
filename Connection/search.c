@@ -10,8 +10,13 @@ TrieNode *initTrieNode()
             newNode->children[i] = NULL;
         }
         newNode->tableEntry = NULL;
+        return newNode;
     }
-    return newNode;
+    else
+    {
+        handleSYSandInputErrors("malloc");
+        return NULL;
+    }
 }
 
 void insertRecordToTrie(TrieNode *root, struct record *newTableEntry)
@@ -26,9 +31,8 @@ void insertRecordToTrie(TrieNode *root, struct record *newTableEntry)
         }
         temp = temp->children[index];
     }
-    // temp->rec = strdup(ip); // copy the ip and port into the struct
-    // temp->port = port;
     temp->tableEntry = newTableEntry;
+    temp->tableEntry->creationTime = time(NULL); // 
 }
 
 // can modify the search algo accordingly to return appropriate values.
@@ -42,7 +46,7 @@ struct record *search(TrieNode *root, char *file_path)
         if (temp->children[index] == NULL)
         {
             // if at any time, you find that there does not exist an trienode with any character of the file path, the search fails.
-            printf("File not found\n");
+            handleFileOperationError("search");
             return NULL;
         }
         temp = temp->children[index];
@@ -54,7 +58,7 @@ struct record *search(TrieNode *root, char *file_path)
     }
     else
     {
-        printf("File not found\n");
+        handleFileOperationError("search");
         return NULL;
     }
 }

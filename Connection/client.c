@@ -46,14 +46,22 @@ int sendRequest(char *input, int sockfd)
 	// printf("here");
 	// recieve the storage server details
 	struct ssDetails ss;
+
 	int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
+
 	if (bytesRecv == -1)
 	{
 		perror("recv");
+		return -2;
 	}
+
 	if (bytesRecv == 0)
 	{
 		return -1;
+	}
+	if (ss.id == -1)
+	{
+		return -2;
 	}
 
 	printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
@@ -140,7 +148,7 @@ int main(int argc, char *argv[])
 {
 	if (argc != 2)
 	{
-		printf("Invalid Arguments!\n");
+		handleSYSandInputErrors("invalid_input");
 		exit(0);
 	}
 
@@ -167,12 +175,19 @@ int main(int argc, char *argv[])
 
 		// printf(".%ld.%s.\n", strlen(input), input);
 		int status = sendRequest(input, sockfd);
+		if (status == -2)
+		{
+			handleFileOperationError("no_file");
+			continue;
+		}
+
 		if (status == -1)
 		{
 			printf("NM Disconnected\n");
 			exit(0);
 			break;
 		}
+
 		if (status == 0)
 		{
 			printf("Successful Request \n");

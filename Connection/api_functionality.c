@@ -20,7 +20,7 @@ int make_directory(char *dirname)
     }
     else
     {
-        printf("Unable to create directory\n");
+        // printf("Unable to create directory\n");
         return -1;
     }
 }
@@ -34,7 +34,7 @@ int make_file(char *dirname)
     // if file is already existing, it is cleared, just like a normal write
     if (check == -1)
     {
-        printf("Unable to create file\n");
+        // printf("Unable to create file\n");
         return -1;
     }
     else
@@ -57,7 +57,7 @@ int recursive_directory_deletion(char *curr_address)
     DIR *dir = opendir(curr_address);
     if (dir == NULL)
     {
-        perror("opendir");
+        handleFileOperationError("opendir");
         return -1;
     }
 
@@ -75,6 +75,7 @@ int recursive_directory_deletion(char *curr_address)
             // Check the return value and continue with the loop if successful
             if (retval != 0)
             {
+                handleFileOperationError("recursive_directory_deletion");
                 closedir(dir);
                 return retval;
             }
@@ -86,6 +87,7 @@ int recursive_directory_deletion(char *curr_address)
             // Check the return value and continue with the loop if successful
             if (retval != 0)
             {
+                handleFileOperationError("remove");
                 closedir(dir);
                 return retval;
             }
@@ -96,7 +98,6 @@ int recursive_directory_deletion(char *curr_address)
     closedir(dir);
     return retval;
 }
-
 
 void get_request(char request[], char actual_request[])
 {
@@ -157,36 +158,44 @@ int remove_files_and_directory(char *path)
     }
 }
 
-int handle_naming_server_commands(char* command, char* inputS) {
+int handle_naming_server_commands(char *command, char *inputS)
+{
     // Input string
-    if(strcmp("RMDIR", command)!=0 && strcmp("MKFIL", command)!=0 && strcmp("MKDIR", command)!=0){
-        handle_errors("Invalid Command");
+    if (strcmp("RMDIR", command) != 0 && strcmp("MKFIL", command) != 0 && strcmp("MKDIR", command) != 0)
+    {
+        handleSYSandInputErrors("invalid_input");
         return -1;
     }
 
     char *inputString = strdup(inputS);
     char *token = strtok(inputString, "/");
     char *lastToken = NULL;
-    int count=0;
+    int count = 0;
 
     // char cwd[1000];
 
-    while (token != NULL) {
-        if(lastToken!=NULL){
-            //if it is a make directory or file command, I have to make the previous directories
-            if(!isDirectory(lastToken) && (strcmp(command, "MKFIL")==0 || strcmp(command, "MKDIR")==0)){
+    while (token != NULL)
+    {
+        if (lastToken != NULL)
+        {
+            // if it is a make directory or file command, I have to make the previous directories
+            if (!isDirectory(lastToken) && (strcmp(command, "MKFIL") == 0 || strcmp(command, "MKDIR") == 0))
+            {
                 printf("Creating directory: %s\n", lastToken);
-                int err1= make_directory(lastToken);
-                if(err1==-1) handle_errors("make_directory");
-
-            }else if(!isDirectory(lastToken) && strcmp(command, "RMDIR")==0){
-                handle_errors("Path does not exist");
+                int err1 = make_directory(lastToken);
+                if (err1 == -1)
+                    handleFileOperationError("make_directory");
+            }
+            else if (!isDirectory(lastToken) && strcmp(command, "RMDIR") == 0)
+            {
+                handleFileOperationError("no_path");
                 return -1;
             }
             // getcwd(cwd, sizeof(cwd));
             // printf("current directory: %s\n", cwd);
-            int err2= chdir(lastToken);
-            if(err2==-1) handle_errors("chdir");
+            int err2 = chdir(lastToken);
+            if (err2 == -1)
+                handleFileOperationError("chdir");
         }
         lastToken = token;
         token = strtok(NULL, "/");
@@ -194,38 +203,51 @@ int handle_naming_server_commands(char* command, char* inputS) {
 
     // getcwd(cwd, sizeof(cwd));
     // printf("current directory: %s\n", cwd);
-    int err3=0;
+    int err3 = 0;
 
-    if (lastToken != NULL) {
-        if(strcmp(command, "MKFIL")==0){
-            err3= make_file(lastToken);
-            if(err3==-1) handle_errors("make file");
-        }else if(strcmp(command, "MKDIR")==0){
-            err3= make_directory(lastToken);
-            if(err3==-1) handle_errors("make directory");
-        }else if(strcmp(command, "RMDIR")==0){
-            printf("HERE %s\n", lastToken);
-            err3= remove_files_and_directory(lastToken);
-            if(err3==-1) handle_errors("delete file and directory");
+    if (lastToken != NULL)
+    {
+        if (strcmp(command, "MKFIL") == 0)
+        {
+            err3 = make_file(lastToken);
+            if (err3 == -1)
+                handleFileOperationError("make_file");
         }
-        if(err3==0){
+        else if (strcmp(command, "MKDIR") == 0)
+        {
+            err3 = make_directory(lastToken);
+            if (err3 == -1)
+                handleFileOperationError("make_directory");
+        }
+        else if (strcmp(command, "RMDIR") == 0)
+        {
+            printf("HERE %s\n", lastToken);
+            err3 = remove_files_and_directory(lastToken);
+            if (err3 == -1)
+                handleFileOperationError("recursive_directory_deletion");
+        }
+        if (err3 == 0)
+        {
             printf("\e[0;32m%s SUCCESS!\n", command);
         }
     }
     return err3;
 }
 
-void parse_input(char* array[], char* inputS){
+void parse_input(char *array[], char *inputS)
+{
     char *inputString = strdup(inputS);
     char *token = strtok(inputString, " ");
-    int count=0;
+    int count = 0;
 
-    while (token != NULL) {
-        if(count==2){
-            handle_errors("invalid input");
+    while (token != NULL)
+    {
+        if (count == 2)
+        {
+            handleSYSandInputErrors("invalid_input");
             break;
         }
-        array[count]= malloc(sizeof(char)*100);
+        array[count] = malloc(sizeof(char) * 100);
         strcpy(array[count], token);
         count++;
         token = strtok(NULL, " ");

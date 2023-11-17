@@ -24,11 +24,11 @@ struct ssDetails *getRecord(char *path)
     struct record *tableEntry;
     // first check if path exists in cache or not
     tableEntry = searchFileInCache(myCache, path);
-    // printCache(myCache);
     if (tableEntry)
+    {
+        tableEntry->lastModified = time(NULL);
         return tableEntry->orignalSS;
-
-    // printf("LOL!\n");
+    }
 
     tableEntry = search(root, path);
     if (tableEntry)
@@ -36,10 +36,13 @@ struct ssDetails *getRecord(char *path)
         // add the record to cache since it was not present before
         addFile(myCache, tableEntry);
         printf("Record added to cache!\n");
+        tableEntry->lastModified = time(NULL);
         return tableEntry->orignalSS;
     }
     else
+    {
         return NULL;
+    }
 }
 
 void sendRequestToSS(struct ssDetails *ss, char *request)
@@ -77,9 +80,16 @@ void *acceptClientRequests(void *args)
 
         struct ssDetails *ss = getRecord(request);
 
-        printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
-        sendRequestToSS(ss, request);
-
+        if (!ss)
+        {
+            ss = malloc(sizeof(struct ssDetails));
+            ss->id = -1;
+        }
+        else
+        {
+            printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
+            sendRequestToSS(ss, request);
+        }
         // send storage server details
         int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
         if (bytesSent == -1)
@@ -166,7 +176,7 @@ void addStorageServer(int connfd)
     storageServers[storageServerCount].connfd = connfd;
     storageServers[storageServerCount].id = storageServerCount + 1;
 
-     // create a new sockfd for adding paths dynamically
+    // create a new sockfd for adding paths dynamically
     struct sockaddr_in cli;
     socklen_t len = sizeof(cli);
     connfd = accept(nmSock, (struct sockaddr *)&cli, &len);
@@ -270,7 +280,7 @@ int main(int argc, char *argv[])
     // int port = 6969;
     if (argc != 2)
     {
-        printf("Invalid Arguments!\n");
+        handleSYSandInputErrors("invalid_input");
         exit(0);
     }
     int port = atoi(argv[1]);

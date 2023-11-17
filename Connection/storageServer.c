@@ -19,6 +19,8 @@ void convertPermissions(mode_t st_mode, char *perms)
 void sendPathToNS(char *path, char perms[11], size_t size, int nmSock)
 {
 	struct fileDetails *det = (struct fileDetails *)malloc(sizeof(struct fileDetails));
+	if (!det)
+		handleSYSandInputErrors("malloc");
 	strcpy(det->path, path);
 	strcpy(det->perms, perms);
 	det->size = size;
@@ -39,6 +41,8 @@ void *take_inputs_dynamically(void *args)
 	{
 		char *path;
 		path = malloc(sizeof(char) * 250);
+		if (!path)
+			handleSYSandInputErrors("malloc");
 		scanf("%s", path);
 		if (check_path_exists(path))
 		{
@@ -47,8 +51,8 @@ void *take_inputs_dynamically(void *args)
 			int r = stat(path, &dirStat);
 			if (r == -1)
 			{
-				fprintf(stderr, "File error\n");
-				exit(1);
+				handleFileOperationError("stat");
+				return NULL;
 			}
 			char perms[11];
 			convertPermissions(dirStat.st_mode, perms);
@@ -61,7 +65,7 @@ void *take_inputs_dynamically(void *args)
 		}
 		else
 		{
-			printf("path does not exist\n");
+			handleFileOperationError("no_path");
 		}
 	}
 	return NULL;
@@ -102,7 +106,7 @@ void *serveClient_Request(void *args)
 	{
 		perror("recv");
 	}
-	
+
 	printf("Recieved from client: %s\n", buffer);
 	return NULL;
 }
@@ -267,7 +271,7 @@ int main(int argc, char *argv[])
 	// int cliPort = 6971;
 	if (argc != 3)
 	{
-		printf("Invalid Arguments!\n");
+		handleSYSandInputErrors("invalid_input");
 		exit(0);
 	}
 	int nmPort = atoi(argv[1]);
@@ -275,7 +279,7 @@ int main(int argc, char *argv[])
 	printf("NMPORT: %d, CLIPORT:%d\n", nmPort, cliPort);
 	int cliSock = initialzeClientsConnection(cliPort);
 	int nmSock1 = initializeNMConnection("127.0.0.1", 6969, nmPort, cliPort); // for feedback transfer
-	int nmSock2 = initializeNMConnectionForRecords("127.0.0.1", 6969); // for records
+	int nmSock2 = initializeNMConnectionForRecords("127.0.0.1", 6969);		  // for records
 
 	pthread_t nmThread, clientsThread, inputThread;
 	pthread_create(&nmThread, NULL, serveNM_Requests, (void *)&nmSock1);
