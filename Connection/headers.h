@@ -18,6 +18,8 @@
 #include <pthread.h>
 #include <assert.h>
 #include <errno.h>
+#include <sys/wait.h>
+#include <libgen.h>
 
 #include "socket.h"
 #include "api.h"

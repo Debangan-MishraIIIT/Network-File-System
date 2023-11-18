@@ -135,39 +135,73 @@ void freeCache(LRUCache *myCache)
     free(myCache);
 }
 
+// int removeFileFromCache(LRUCache *myCache, char *filePath)
+// {
+//     cacheCell *temp = myCache->head;
+
+//     if (temp == NULL)
+//     {
+//         return 1;
+//     }
+//     else if (temp->next == NULL)
+//     {
+//         cacheCell *temp2 = temp;
+//         myCache->head = NULL;
+//         myCache->numFiles--;
+//         // printf("Deleted from cache!\n");
+//         free(temp2);
+
+//         return 1;
+//     }
+
+//     while (temp->next != NULL)
+//     {
+//         if (strcmp(temp->tableEntry->path, filePath) == 0)
+//         {
+//             // moveCelltoStart(myCache, temp);
+//             cacheCell *temp2 = temp;
+//             if (temp->next != NULL)
+//             {
+//                 temp->next = temp->next->next;
+//             }
+//             myCache->numFiles--;
+//             // printf("Deleted from cache!\n");
+//             free(temp2);
+//             return 1;
+//         }
+//         temp = temp->next;
+//     }
+//     return 0;
+// }
 int removeFileFromCache(LRUCache *myCache, char *filePath)
 {
     cacheCell *temp = myCache->head;
 
-    if (temp == NULL)
-    {
-        return 1;
-    }
-    else if (temp->next == NULL)
-    {
-        cacheCell *temp2 = temp;
-        myCache->head = NULL;
-        myCache->numFiles--;
-        // printf("Deleted from cache!\n");
-        free(temp2);
-
-        return 1;
-    }
-
-    while (temp->next != NULL)
+    while (temp != NULL)
     {
         if (strcmp(temp->tableEntry->path, filePath) == 0)
         {
-            // moveCelltoStart(myCache, temp);
-            cacheCell *temp2 = temp;
-            if (temp->next != NULL)
+            if (temp == myCache->head)
             {
-                temp->next = temp->next->next;
+                myCache->head = temp->next;
+                if (myCache->head != NULL)
+                    myCache->head->prev = NULL;
             }
+            else if (temp == myCache->tail)
+            {
+                myCache->tail = temp->prev;
+                if (myCache->tail != NULL)
+                    myCache->tail->next = NULL;
+            }
+            else
+            {
+                temp->prev->next = temp->next;
+                temp->next->prev = temp->prev;
+            }
+
+            free(temp);
             myCache->numFiles--;
-            // printf("Deleted from cache!\n");
-            free(temp2);
-            return 1;
+            return 0;
         }
         temp = temp->next;
     }

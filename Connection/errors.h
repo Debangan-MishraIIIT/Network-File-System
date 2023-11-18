@@ -2,7 +2,9 @@
 #define __ERRORS_H
 
 void handleFileOperationError(char *error);
-void handleSYSandInputErrors(char *error);
+void handleSYSErrors(char *error);
 void handleNetworkErrors(char *error);
+void handleAllErrors(char *error);
+void handle_errors(char *error);
 
 #endif

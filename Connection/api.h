@@ -18,5 +18,8 @@ void parse_input(char *array[], char *inputS);
 void file_separator(char *array[], char *inputS);
 
 int removeFile(char *path);
+int removeDirectory(char *path);
+int makeDirectory(char *path);
+int makeFile(char *path);
 
 #endif

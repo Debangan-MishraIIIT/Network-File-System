@@ -32,7 +32,8 @@ int sendRequest(char *input, int sockfd)
 	parse_input(arg_arr, input);
 	char *request_command = arg_arr[0];
 
-	if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)
+	// privileged
+	if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0)
 	{
 		int bytesSent = send(sockfd, input, strlen(input), 0);
 		if (bytesSent == -1)
@@ -45,24 +46,71 @@ int sendRequest(char *input, int sockfd)
 			return -1;
 		}
 
-		// ack
-		char buffer[1000];
-		int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
-
+		// recieve ack
+		char ackMsg[4096];
+		bzero(ackMsg, sizeof(ackMsg));
+		int bytesRecv = recv(sockfd, ackMsg, sizeof(ackMsg), 0);
 		if (bytesRecv == -1)
 		{
-			handle_errors("recv");
+			handleNetworkErrors("recv");
 		}
-		// printf("Recieved from NM\n%s\n\n", buffer);
-		if (strcmp(buffer, "SUCCESS IN EXECUTION") == 0)
+
+		// only for output formatting
+		if (strcmp(request_command, "MKDIR") == 0)
 		{
-			printf(YELLOW_COLOR"File %s removed\n"RESET_COLOR, arg_arr[1]);
-			return 0;
+			if (strcmp(ackMsg, "SUCCESS") == 0)
+			{
+				printf(GREEN_COLOR "Directory %s successfully created\n" RESET_COLOR, arg_arr[1]);
+				return 0;
+			}
+			else
+			{
+				handleAllErrors(ackMsg);
+				printf(RED_COLOR "Directory %s could not be created\n" RESET_COLOR, arg_arr[1]);
+				return -2;
+			}
 		}
-		else
+		else if (strcmp(request_command, "MKFILE") == 0)
 		{
-			printf(ORANGE_COLOR"File %s not removed\n"RESET_COLOR, arg_arr[1]);
-			return -2;
+			if (strcmp(ackMsg, "SUCCESS") == 0)
+			{
+				printf(GREEN_COLOR "File %s successfully created\n" RESET_COLOR, arg_arr[1]);
+				return 0;
+			}
+			else
+			{
+				handleAllErrors(ackMsg);
+				printf(RED_COLOR "File %s could not be created\n" RESET_COLOR, arg_arr[1]);
+				return -2;
+			}
+		}
+		else if (strcmp(request_command, "RMDIR") == 0)
+		{
+			if (strcmp(ackMsg, "SUCCESS") == 0)
+			{
+				printf(GREEN_COLOR "Directory %s successfully removed\n" RESET_COLOR, arg_arr[1]);
+				return 0;
+			}
+			else
+			{
+				handleAllErrors(ackMsg);
+				printf(RED_COLOR "Directory %s could not be removed\n" RESET_COLOR, arg_arr[1]);
+				return -2;
+			}
+		}
+		else if (strcmp(request_command, "RMFILE") == 0)
+		{
+			if (strcmp(ackMsg, "SUCCESS") == 0)
+			{
+				printf(GREEN_COLOR "File %s successfully removed\n" RESET_COLOR, arg_arr[1]);
+				return 0;
+			}
+			else
+			{
+				handleAllErrors(ackMsg);
+				printf(RED_COLOR "File %s could not be removed\n" RESET_COLOR, arg_arr[1]);
+				return -2;
+			}
 		}
 	}
 	else
@@ -205,14 +253,6 @@ int main(int argc, char *argv[])
 			printf(RED_COLOR "[-] Naming Server has disconnected!\n" RESET_COLOR);
 			exit(0);
 			break;
-		}
-		if (status == 0)
-		{
-			printf("Request Over\n");
-		}
-		if (status == -2)
-		{
-			printf("Request Failed\n");
 		}
 
 		free(input);

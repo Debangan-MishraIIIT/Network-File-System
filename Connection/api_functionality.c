@@ -464,30 +464,116 @@ void file_separator(char *array[], char *inputS)
     }
 }
 
-
 int removeFile(char *path)
 {
     if (!check_path_exists(path))
     {
-        printf("file not found"); // error
-        return -1;
+        return -1; // file_not_found
     }
     else
     {
         if (isDirectory(path))
         {
-            printf("directory path given instead of file"); // error
-            return -1;
+            return -2; // not_file
         }
         else
         {
             int ret = remove(path);
             if (ret == -1)
             {
-                printf("remvove sys call failed\n"); //error
-                return -1;
+                return -3; // remove system call
             }
         }
     }
     return 0;
+}
+
+int removeDirectory(char *path)
+{
+    if (!check_path_exists(path))
+    {
+        return -1; // dir_not_found
+    }
+    else
+    {
+        if (!isDirectory(path))
+        {
+            return -2; // not_dir
+        }
+        else
+        {
+            int ret = rmdir(path);
+            if (ret == -1)
+            {
+                return -3; // rmdir system call
+            }
+        }
+    }
+    return 0;
+}
+
+int makeDirectory(char *path)
+{
+    char *baseDir = dirname(strdup(path));
+    int retval = 0;
+    if (check_path_exists(path))
+    {
+        retval = 0; // just need to make it accessible
+    }
+    else
+    {
+        if (!check_path_exists(baseDir))
+        {
+            retval = -1; // dir_not_found
+        }
+        else
+        {
+            if (!isDirectory(baseDir))
+            {
+                retval = -2; // not_dir
+            }
+            else
+            {
+                int ret = mkdir(path, 0755);
+                if (ret == -1)
+                {
+                    retval = -3; // mkdir syscall
+                }
+            }
+        }
+    }
+    return retval;
+}
+
+int makeFile(char *path)
+{
+    char *baseDir = dirname(strdup(path));
+    int retval = 0;
+    if (check_path_exists(path))
+    {
+        retval = 0; // just need to make it accessible
+    }
+    else
+    {
+        if (!check_path_exists(baseDir))
+        {
+            retval = -1; // file_not_found
+        }
+        else
+        {
+            if (!isDirectory(baseDir))
+            {
+                retval = -1; // not_file
+            }
+            else
+            {
+                int ret = creat(path, 0644);
+                if (ret == -1)
+                {
+                    retval = -1; // creat syscall
+                }
+            }
+        }
+    }
+    return retval;
 }

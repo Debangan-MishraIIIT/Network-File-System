@@ -29,7 +29,17 @@ void sendPathToNS(char *path, char perms[11], size_t size, int nmSock)
 	{
 		handleNetworkErrors("send");
 	}
-	printf(BLUE_COLOR "Added %s as an accessible path\n" RESET_COLOR, path);
+	char status[100];
+	bzero(status, sizeof(status));
+	int bytesRecv = recv(nmSock, status, sizeof(status), 0);
+	if (bytesRecv == -1)
+	{
+		handleNetworkErrors("recv");
+	}
+	if (strcmp(status, "ADDED") == 0)
+	{
+		printf(BLUE_COLOR "Added %s as an accessible path\n" RESET_COLOR, path);
+	}
 }
 
 void *takeInputsDynamically(void *args)
@@ -51,39 +61,35 @@ void *takeInputsDynamically(void *args)
 		char *path = strtok(NULL, " \n");
 		if (check_path_exists(path))
 		{
-			// // send all parent directories
-			// char *parentPath = strdup(path);
-			// char *slashPos = strrchr(parentPath, '/');
-			// while (slashPos != NULL)
-			// {
-			// 	*slashPos = '\0'; // Replace the slash with null character to get the parent path
-			// 	struct stat dirStat;
-			// 	int r = stat(parentPath, &dirStat);
-			// 	if (r == -1)
-			// 	{
-			// 		fprintf(stderr, "File error\n");
-			// 		exit(1);
-			// 	}
-			// 	char perms[11];
-			// 	convertPermissions(dirStat.st_mode, perms);
-			// 	size_t size = dirStat.st_size;
-			// 	sendPathToNS(parentPath, perms, size, nmSock);
-			// 	slashPos = strrchr(parentPath, '/'); // Find the next slash
-			// }
-			// free(parentPath);
+			char *finalPath = strdup(path);
+			char *token = strtok(finalPath, "/");
+			char *currPath = strdup("");
 
-			// send given file
-			struct stat dirStat;
-			int r = stat(path, &dirStat);
-			if (r == -1)
+			while (token != NULL)
 			{
-				fprintf(stderr, "File error\n");
-				exit(1);
+				if (strlen(currPath) != 0)
+				{
+					strcat(currPath, "/");
+				}
+				strcat(currPath, token);
+
+				struct stat dirStat;
+				int r = stat(currPath, &dirStat);
+				if (r == -1)
+				{
+					fprintf(stderr, "File error\n");
+					exit(1);
+				}
+				char perms[11];
+				convertPermissions(dirStat.st_mode, perms);
+				size_t size = dirStat.st_size;
+				sendPathToNS(currPath, perms, size, nmSock);
+
+				token = strtok(NULL, "/");
 			}
-			char perms[11];
-			convertPermissions(dirStat.st_mode, perms);
-			size_t size = dirStat.st_size;
-			sendPathToNS(path, perms, size, nmSock);
+
+			free(finalPath);
+			free(currPath);
 		}
 		else
 		{
@@ -114,37 +120,128 @@ void *serveNM_Requests(void *args)
 			break;
 		}
 
-		printf(YELLOW_COLOR "Recieved command from NM: %s\n" RESET_COLOR, buffer);
+		printf(CYAN_COLOR "Recieved command from NM: %s\n" RESET_COLOR, buffer);
 
 		char *request_command = strtok(buffer, " \t\n");
 		char *path = strtok(NULL, " \t\n");
 
 		int status = -1;
+		char statusMsg[4096];
+		bzero(statusMsg, sizeof(statusMsg));
+
 		if (strcmp(request_command, "RMFILE") == 0)
 		{
 			// RMFILE path
 			status = removeFile(path);
+			switch (status)
+			{
+			case 0:
+				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				strcpy(statusMsg, "SUCCESS");
+				break;
+			case -1:
+				handleFileOperationError("file_not_found");
+				strcpy(statusMsg, "file_not_found");
+				break;
+			case -2:
+				handleFileOperationError("not_file");
+				strcpy(statusMsg, "not_file");
+				break;
+			case -3:
+				handleSYSErrors("remove");
+				strcpy(statusMsg, "remove");
+				break;
+			default:
+				break;
+			}
 		}
-
-		char statusMsg[1000];
-		bzero(statusMsg, sizeof(statusMsg));
-		if (status == -1)
+		else if(strcmp(request_command, "MKDIR") == 0)
 		{
-			printf(YELLOW_COLOR "Command failed\n" RESET_COLOR);
-
-			strcpy(statusMsg, "ERROR IN EXECUTION\0");
+			// RMFILE path
+			status = makeDirectory(path);
+			switch (status)
+			{
+			case 0:
+				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				strcpy(statusMsg, "SUCCESS");
+				break;
+			case -1:
+				handleFileOperationError("dir_not_found");
+				strcpy(statusMsg, "dir_not_found");
+				break;
+			case -2:
+				handleFileOperationError("not_dir");
+				strcpy(statusMsg, "not_dir");
+				break;
+			case -3:
+				handleSYSErrors("mkdir");
+				strcpy(statusMsg, "mkdir");
+				break;
+				break;
+			default:
+				break;
+			}
+		}
+		else if(strcmp(request_command, "RMDIR") == 0)
+		{
+			// RMFILE path
+			status = removeDirectory(path);
+			switch (status)
+			{
+			case 0:
+				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				strcpy(statusMsg, "SUCCESS");
+				break;
+			case -1:
+				handleFileOperationError("dir_not_found");
+				strcpy(statusMsg, "dir_not_found");
+				break;
+			case -2:
+				handleFileOperationError("not_dir");
+				strcpy(statusMsg, "not_dir");
+				break;
+			case -3:
+				handleSYSErrors("rmdir");
+				strcpy(statusMsg, "rmdir");
+				break;
+			default:
+				break;
+			}
+		}
+		else if(strcmp(request_command, "MKFILE") == 0)
+		{
+			// RMFILE path
+			status = makeFile(path);
+			switch (status)
+			{
+			case 0:
+				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				strcpy(statusMsg, "SUCCESS");
+				break;
+			case -1:
+				handleFileOperationError("file_not_found");
+				strcpy(statusMsg, "file_not_found");
+				break;
+			case -2:
+				handleFileOperationError("not_file");
+				strcpy(statusMsg, "not_file");
+				break;
+			case -3:
+				handleSYSErrors("creat");
+				strcpy(statusMsg, "creat");
+				break;
+			default:
+				break;
+			}
 		}
 		else
 		{
-			printf(YELLOW_COLOR "Command executed\n" RESET_COLOR);
-			strcpy(statusMsg, "SUCCESS IN EXECUTION\0");
+			continue;
 		}
-		// printf("sending: %s\n", statusMsg);
 		int bytesSend = send(nmfd, statusMsg, strlen(statusMsg), 0);
-
 		if (bytesSend == -1)
 		{
-			handle_errors("send");
+			handleNetworkErrors("send");
 		}
 	}
 	return NULL;

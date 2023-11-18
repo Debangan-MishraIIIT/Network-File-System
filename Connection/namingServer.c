@@ -47,7 +47,7 @@ void addToRecords(struct record *r)
     {
         return;
     }
-    
+
     char *finalPath = strdup(r->path);
     char *token = strtok(finalPath, "/");
     struct record *parentNode = root;
@@ -63,7 +63,6 @@ void addToRecords(struct record *r)
         {
             currPath[strlen(currPath)] = '/';
         }
-
         strcpy(currPath + strlen(currPath), token);
 
         // printf("Curr path: %s\n", currPath);
@@ -96,6 +95,7 @@ void addToRecords(struct record *r)
         token = strtok(NULL, "/");
     }
     insertRecordToTrie(trieRoot, r);
+    printf(BLUE_COLOR "Added %s as accessible path in Storage Server %d\nPermissions: %s\n" RESET_COLOR, r->path, r->orignalSS->id, r->originalPerms);
     return;
 }
 
@@ -124,7 +124,6 @@ void removeFromRecords(char *path)
     }
     free(r->path);
     free(r);
-    // r = NULL;
     pthread_mutex_unlock(&recordsLock);
 }
 
@@ -153,31 +152,27 @@ void *acceptClientRequests(void *args)
             break;
         }
 
-        printf(YELLOW_COLOR"Comamnd from client %d- \'%s\'\n" RESET_COLOR, cli->id, request);
-        // struct ssDetails *ss = &storageServers[atoi(request)];
+        printf(YELLOW_COLOR "Comamnd from client %d: \'%s\'\n" RESET_COLOR, cli->id, request);
 
-        // char *request_command = strtok(request, " \t\n");
-        // char *path = strtok(NULL, " \t\n");
         char *arg_arr[3];
         parse_input(arg_arr, request);
         char *request_command = arg_arr[0];
 
-        if (strcmp(request_command, "RMFILE") == 0)
+        if (strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0)
         {
-            // RMFILE path
+            // RMFILE/RMDIR path
             struct record *r = getRecord(arg_arr[1]);
             if (r == NULL)
             {
                 // sending ack status to client
-                printf("record not found");
-                bytesSent = send(cli->connfd, "ERROR IN EXECUTION", sizeof("ERROR IN EXECUTION"), 0);
+                handleFileOperationError("no_path");
+                bytesSent = send(cli->connfd, "no_path", sizeof("no_path"), 0);
                 if (bytesSent == -1)
                 {
-                    handle_errors("send"); // error
+                    handleNetworkErrors("send");
                 }
                 continue;
             }
-
             struct ssDetails *ss = r->orignalSS;
 
             // sending to ss
@@ -187,37 +182,141 @@ void *acceptClientRequests(void *args)
                 handleNetworkErrors("send");
             }
 
-            char buffer[4096];
-            bzero(buffer, sizeof(buffer));
             // receiving ack status from ss
-            bytesRecv = recv(ss->connfd, buffer, sizeof(buffer), 0);
+            char ackStatus[4096];
+            bzero(ackStatus, sizeof(ackStatus));
+            bytesRecv = recv(ss->connfd, ackStatus, sizeof(ackStatus), 0);
             if (bytesRecv == -1)
             {
-                handle_errors("recv");
+                handleNetworkErrors("recv");
             }
-            // printf("Recieved from SS\n%s\n\n", buffer); // error to be printed
-            if (strcmp(buffer, "SUCCESS IN EXECUTION") == 0)
+
+            if (strcmp(ackStatus, "SUCCESS") == 0)
             {
-			printf(YELLOW_COLOR "Command executed\n" RESET_COLOR);
+                printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
                 removeFromRecords(arg_arr[1]);
             }
-            else{
-			printf(YELLOW_COLOR "Command failed\n" RESET_COLOR);
-
+            else
+            {
+                printf(YELLOW_COLOR "Command failed\n" RESET_COLOR);
             }
             // sending ack status to client
-            bytesSent = send(cli->connfd, buffer, sizeof(buffer), 0);
+            bytesSent = send(cli->connfd, ackStatus, sizeof(ackStatus), 0);
             if (bytesSent == -1)
             {
-                handle_errors("send"); // error
+                handleNetworkErrors("send");
             }
-
-            // printf("Request over\n");
 
             continue;
         }
 
-        else if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)
+        else if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0)
+        {
+            char *arg_copy = strdup(arg_arr[1]);
+
+            // file or dir already exists
+            if (getRecord(arg_copy) != NULL)
+            {
+                if (strcmp(request_command, "MKDIR") == 0)
+                {
+                    handleFileOperationError("dir_exists");
+                    bytesSent = send(cli->connfd, "dir_exists", sizeof("dir_exists"), 0);
+                }
+                if (strcmp(request_command, "MKFILE") == 0)
+                {
+                    handleFileOperationError("file_exists");
+                    bytesSent = send(cli->connfd, "file_exists", sizeof("file_exists"), 0);
+                }
+                if (bytesSent == -1)
+                {
+                    handleNetworkErrors("send");
+                }
+                continue;
+            }
+
+            char *baseDir = dirname(arg_copy);
+            struct record *r = getRecord(baseDir);
+
+            if (r == NULL)
+            {
+                // sending ack status to client
+                handleFileOperationError("no_path");
+                bytesSent = send(cli->connfd, "no_path", sizeof("no_path"), 0);
+                if (bytesSent == -1)
+                {
+                    handleNetworkErrors("send");
+                }
+                continue;
+            }
+            struct ssDetails *ss = r->orignalSS;
+
+            // sending to ss
+            bytesSent = send(ss->connfd, request, sizeof(request), 0);
+            if (bytesSent == -1)
+            {
+                handleNetworkErrors("send");
+            }
+
+            // receiving ack status from ss
+            char ackStatus[4096];
+            bzero(ackStatus, sizeof(ackStatus));
+            bytesRecv = recv(ss->connfd, ackStatus, sizeof(ackStatus), 0);
+            if (bytesRecv == -1)
+            {
+                handleNetworkErrors("recv");
+            }
+
+            if (strcmp(ackStatus, "SUCCESS") == 0)
+            {
+                printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+
+                // need to add record
+                struct record *r = malloc(sizeof(struct record));
+
+                r->path = malloc(sizeof(char) * 4096);
+                strcpy(r->path, arg_arr[1]);
+                r->orignalSS = ss;
+                if (strcmp(request_command, "MKDIR") == 0)
+                {
+                    strcpy(r->originalPerms, "drwxr-xr-x");
+                    r->isDir = true;
+                    strcpy(r->currentPerms, "drwxr-xr-x");
+                }
+                if (strcmp(request_command, "MKFILE") == 0)
+                {
+                    strcpy(r->originalPerms, "-rw-r--r--");
+                    r->isDir = false;
+                    strcpy(r->currentPerms, "-rw-r--r--");
+                }
+                r->backupSS1 = NULL;
+                r->backupSS2 = NULL;
+                r->size = 0;
+                r->creationTime = time(NULL);
+                r->lastModifiedTime = time(NULL);
+
+                r->firstChild = NULL;
+                r->nextSibling = NULL;
+                r->parent = NULL;
+                r->prevSibling = NULL;
+
+                addToRecords(r);
+            }
+            else
+            {
+                handleAllErrors(ackStatus);
+                printf(YELLOW_COLOR "Command failed\n" RESET_COLOR);
+            }
+            // sending ack status to client
+            bytesSent = send(cli->connfd, ackStatus, sizeof(ackStatus), 0);
+            if (bytesSent == -1)
+            {
+                handleNetworkErrors("send");
+            }
+
+            continue;
+        }
+
+        else if (strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)
         {
             // ack
             // char buffer[1000];
@@ -270,11 +369,17 @@ void *addPaths(void *args)
         }
         pthread_mutex_lock(&recordsLock);
 
-        // if (getRecord(det.path)!=NULL)
-        // {
-        //     continue;
-        // }
-        
+        if (getRecord(det.path) != NULL)
+        {
+            int bytesSent = send(ss->addPathfd, "REPEAT", strlen("REPEAT"), 0);
+            if (bytesSent == -1)
+            {
+                handleNetworkErrors("send");
+            }
+            pthread_mutex_unlock(&recordsLock);
+            continue;
+        }
+
         struct record *r = malloc(sizeof(struct record));
 
         r->path = malloc(sizeof(char) * 4096);
@@ -295,8 +400,11 @@ void *addPaths(void *args)
         r->prevSibling = NULL;
 
         addToRecords(r);
-
-        printf(BLUE_COLOR "Added %s as accessible path in Storage Server %d\nPermissions: %s\n" RESET_COLOR, r->path, r->orignalSS->id, r->originalPerms);
+        int bytesSent = send(ss->addPathfd, "ADDED", strlen("ADDED"), 0);
+        if (bytesSent == -1)
+        {
+            handleNetworkErrors("send");
+        }
         pthread_mutex_unlock(&recordsLock);
     }
 
