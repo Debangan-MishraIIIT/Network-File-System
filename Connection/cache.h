@@ -28,5 +28,6 @@ void moveCelltoStart(LRUCache *myCache, cacheCell *cell);
 void addFile(LRUCache *myCache, struct record *newTableEntry);
 struct record *searchFileInCache(LRUCache *myCache, char *filePath);
 void freeCache(LRUCache *myCache);
+int removeFileFromCache(LRUCache *myCache, char *filePath);
 
 #endif

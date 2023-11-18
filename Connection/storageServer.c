@@ -29,7 +29,7 @@ void sendPathToNS(char *path, char perms[11], size_t size, int nmSock)
 	{
 		handleNetworkErrors("send");
 	}
-	printf(BLUE_COLOR"Added %s as an accessible path\n"RESET_COLOR, path);
+	printf(BLUE_COLOR "Added %s as an accessible path\n" RESET_COLOR, path);
 }
 
 void *takeInputsDynamically(void *args)
@@ -42,17 +42,38 @@ void *takeInputsDynamically(void *args)
 		// scanf("%s", path);
 		char input[4096];
 		fgets(input, 4096, stdin);
-		char * token = strtok(input, " \t\n");
+		char *token = strtok(input, " \t\n");
 		if (strcmp(token, "ADD"))
 		{
-			printf(RED_COLOR"Invalid Syntax!\n"RESET_COLOR);
+			printf(RED_COLOR "Invalid Syntax!\n" RESET_COLOR);
 			continue;
 		}
-		char * path = strtok(NULL, " \n");
+		char *path = strtok(NULL, " \n");
 		if (check_path_exists(path))
 		{
+			// // send all parent directories
+			// char *parentPath = strdup(path);
+			// char *slashPos = strrchr(parentPath, '/');
+			// while (slashPos != NULL)
+			// {
+			// 	*slashPos = '\0'; // Replace the slash with null character to get the parent path
+			// 	struct stat dirStat;
+			// 	int r = stat(parentPath, &dirStat);
+			// 	if (r == -1)
+			// 	{
+			// 		fprintf(stderr, "File error\n");
+			// 		exit(1);
+			// 	}
+			// 	char perms[11];
+			// 	convertPermissions(dirStat.st_mode, perms);
+			// 	size_t size = dirStat.st_size;
+			// 	sendPathToNS(parentPath, perms, size, nmSock);
+			// 	slashPos = strrchr(parentPath, '/'); // Find the next slash
+			// }
+			// free(parentPath);
+
+			// send given file
 			struct stat dirStat;
-			// printf("path exists\n");
 			int r = stat(path, &dirStat);
 			if (r == -1)
 			{
@@ -62,11 +83,7 @@ void *takeInputsDynamically(void *args)
 			char perms[11];
 			convertPermissions(dirStat.st_mode, perms);
 			size_t size = dirStat.st_size;
-			// printf("path: %s\n", path);
-			// printf("Permission bits: %s\n", perms);
-			// printf("Size: %zu bytes\n", size);
 			sendPathToNS(path, perms, size, nmSock);
-			// send path to NS
 		}
 		else
 		{
@@ -97,7 +114,38 @@ void *serveNM_Requests(void *args)
 			break;
 		}
 
-		printf("Recieved from NM: %s\n", buffer);
+		printf(YELLOW_COLOR "Recieved command from NM: %s\n" RESET_COLOR, buffer);
+
+		char *request_command = strtok(buffer, " \t\n");
+		char *path = strtok(NULL, " \t\n");
+
+		int status = -1;
+		if (strcmp(request_command, "RMFILE") == 0)
+		{
+			// RMFILE path
+			status = removeFile(path);
+		}
+
+		char statusMsg[1000];
+		bzero(statusMsg, sizeof(statusMsg));
+		if (status == -1)
+		{
+			printf(YELLOW_COLOR "Command failed\n" RESET_COLOR);
+
+			strcpy(statusMsg, "ERROR IN EXECUTION\0");
+		}
+		else
+		{
+			printf(YELLOW_COLOR "Command executed\n" RESET_COLOR);
+			strcpy(statusMsg, "SUCCESS IN EXECUTION\0");
+		}
+		// printf("sending: %s\n", statusMsg);
+		int bytesSend = send(nmfd, statusMsg, strlen(statusMsg), 0);
+
+		if (bytesSend == -1)
+		{
+			handle_errors("send");
+		}
 	}
 	return NULL;
 }

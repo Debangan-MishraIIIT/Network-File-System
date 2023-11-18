@@ -269,7 +269,6 @@ int check_path_exists(const char *directoryPath)
 
 int remove_files_and_directory(char *path)
 {
-
     if (!check_path_exists(path))
     {
         return -1;
@@ -427,7 +426,7 @@ int handle_naming_server_commands(char *command, char *inputS, int nmfd)
 void parse_input(char *array[], char *inputS)
 {
     char *inputString = strdup(inputS);
-    char *token = strtok(inputString, " ");
+    char *token = strtok(inputString, " \t\n");
     int count = 0;
 
     while (token != NULL)
@@ -440,7 +439,7 @@ void parse_input(char *array[], char *inputS)
         array[count] = malloc(sizeof(char) * 100);
         strcpy(array[count], token);
         count++;
-        token = strtok(NULL, " ");
+        token = strtok(NULL, " \t\n");
     }
 }
 
@@ -463,4 +462,32 @@ void file_separator(char *array[], char *inputS)
         count++;
         token = strtok(NULL, " ");
     }
+}
+
+
+int removeFile(char *path)
+{
+    if (!check_path_exists(path))
+    {
+        printf("file not found"); // error
+        return -1;
+    }
+    else
+    {
+        if (isDirectory(path))
+        {
+            printf("directory path given instead of file"); // error
+            return -1;
+        }
+        else
+        {
+            int ret = remove(path);
+            if (ret == -1)
+            {
+                printf("remvove sys call failed\n"); //error
+                return -1;
+            }
+        }
+    }
+    return 0;
 }

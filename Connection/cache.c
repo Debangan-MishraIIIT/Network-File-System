@@ -109,10 +109,10 @@ struct record *searchFileInCache(LRUCache *myCache, char *filePath)
 
     while (temp != NULL)
     {
-        if (temp->tableEntry->isValid && strcmp(temp->tableEntry->path, filePath) == 0)
+        if (strcmp(temp->tableEntry->path, filePath) == 0)
         {
             moveCelltoStart(myCache, temp);
-            printf("Retrieved from cache!\n");
+            // printf("Retrieved from cache!\n");
             return temp->tableEntry;
         }
         temp = temp->next;
@@ -133,4 +133,43 @@ void freeCache(LRUCache *myCache)
     }
 
     free(myCache);
+}
+
+int removeFileFromCache(LRUCache *myCache, char *filePath)
+{
+    cacheCell *temp = myCache->head;
+
+    if (temp == NULL)
+    {
+        return 1;
+    }
+    else if (temp->next == NULL)
+    {
+        cacheCell *temp2 = temp;
+        myCache->head = NULL;
+        myCache->numFiles--;
+        // printf("Deleted from cache!\n");
+        free(temp2);
+
+        return 1;
+    }
+
+    while (temp->next != NULL)
+    {
+        if (strcmp(temp->tableEntry->path, filePath) == 0)
+        {
+            // moveCelltoStart(myCache, temp);
+            cacheCell *temp2 = temp;
+            if (temp->next != NULL)
+            {
+                temp->next = temp->next->next;
+            }
+            myCache->numFiles--;
+            // printf("Deleted from cache!\n");
+            free(temp2);
+            return 1;
+        }
+        temp = temp->next;
+    }
+    return 0;
 }

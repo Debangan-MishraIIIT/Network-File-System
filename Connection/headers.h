@@ -67,7 +67,6 @@ struct accessibleFile
 
 struct record
 {
-    bool isValid;
     char * path;
     struct ssDetails *orignalSS;
     char originalPerms[11];
@@ -76,6 +75,14 @@ struct record
     struct ssDetails *backupSS1;
     struct ssDetails *backupSS2;
     size_t size;
+    time_t creationTime;
+    time_t lastModifiedTime;
+
+    // for n-ary tree
+    struct record *firstChild;
+    struct record * nextSibling;
+    struct record * parent;
+    struct record * prevSibling;
 };
 
 struct fileDetails

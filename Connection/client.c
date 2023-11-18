@@ -28,22 +28,42 @@ int joinSS(struct ssDetails ss)
 int sendRequest(char *input, int sockfd)
 {
 	// send request
-	char request[4096];
-	strcpy(request, input);
-
-	char *request_command = strtok(input, " \t\n");
+	char *arg_arr[3];
+	parse_input(arg_arr, input);
+	char *request_command = arg_arr[0];
 
 	if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)
 	{
-		// ack
-		// char buffer[1000];
-		// int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
+		int bytesSent = send(sockfd, input, strlen(input), 0);
+		if (bytesSent == -1)
+		{
+			handleNetworkErrors("send");
+		}
+		if (bytesSent == 0)
+		{
+			// nm has disconnected
+			return -1;
+		}
 
-		// if (bytesRecv == -1)
-		// {
-		// 	handle_errors("recv");
-		// }
+		// ack
+		char buffer[1000];
+		int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
+
+		if (bytesRecv == -1)
+		{
+			handle_errors("recv");
+		}
 		// printf("Recieved from NM\n%s\n\n", buffer);
+		if (strcmp(buffer, "SUCCESS IN EXECUTION") == 0)
+		{
+			printf(YELLOW_COLOR"File %s removed\n"RESET_COLOR, arg_arr[1]);
+			return 0;
+		}
+		else
+		{
+			printf(ORANGE_COLOR"File %s not removed\n"RESET_COLOR, arg_arr[1]);
+			return -2;
+		}
 	}
 	else
 	{
@@ -51,40 +71,29 @@ int sendRequest(char *input, int sockfd)
 		return 0;
 	}
 
-	int bytesSent = send(sockfd, request, strlen(request), 0);
-	if (bytesSent == -1)
-	{
-		handleNetworkErrors("send");
-	}
-	if (bytesSent == 0)
-	{
-		// nm has disconnected
-		return -1;
-	}
+	// // recieve the storage server details
+	// struct ssDetails ss;
+	// int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
+	// if ((ss.id <= 0) || bytesRecv == 0 || (bytesRecv == -1 && errno == ECONNRESET))
+	// {
+	// 	// nm has disconnected
+	// 	return -1;
+	// }
+	// if (bytesRecv == -1)
+	// {
+	// 	handleNetworkErrors("recv");
+	// 	return 0;
+	// }
 
-	// recieve the storage server details
-	struct ssDetails ss;
-	int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
-	if ((ss.id <= 0) || bytesRecv == 0 || (bytesRecv == -1 && errno == ECONNRESET))
-	{
-		// nm has disconnected
-		return -1;
-	}
-	if (bytesRecv == -1)
-	{
-		handleNetworkErrors("recv");
-		return 0;
-	}
+	// printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
 
-	printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
-
-	int connfd = joinSS(ss);
-	bytesSent = send(connfd, request, sizeof(request), 0);
-	if (bytesSent == -1)
-	{
-		handleNetworkErrors("recv");
-	}
-	printf("\'%s\' sent to SS %s:%d\n", request, ss.ip, ss.cliPort);
+	// int connfd = joinSS(ss);
+	// bytesSent = send(connfd, request, sizeof(request), 0);
+	// if (bytesSent == -1)
+	// {
+	// 	handleNetworkErrors("recv");
+	// }
+	// printf("\'%s\' sent to SS %s:%d\n", request, ss.ip, ss.cliPort);
 	return 0;
 }
 
@@ -201,6 +210,11 @@ int main(int argc, char *argv[])
 		{
 			printf("Request Over\n");
 		}
+		if (status == -2)
+		{
+			printf("Request Failed\n");
+		}
+
 		free(input);
 	}
 	pthread_join(disconnectionThread, NULL);

@@ -7,57 +7,137 @@ int storageServerCount = 0;
 struct cDetails clientDetails[10000];
 bool validCli[10000];
 
-struct record records[10000];
-int recordCount = 0;
+// struct record records[10000];
+// int recordCount = 0;
+struct record *root;
 
 pthread_t clientThreads[10000];
 int clientCount = 0;
-TrieNode *root;
+TrieNode *trieRoot;
 LRUCache *myCache;
 
 pthread_mutex_t hostLock;
 pthread_mutex_t recordsLock;
 int nmSock;
 
-struct ssDetails *getRecord(char *path)
+struct record *getRecord(char *path)
 {
     struct record *tableEntry;
     // first check if path exists in cache or not
     tableEntry = searchFileInCache(myCache, path);
     // printCache(myCache);
     if (tableEntry && validSS[tableEntry->orignalSS->id])
-        return tableEntry->orignalSS;
+        return tableEntry;
 
-    tableEntry = search(root, path);
+    tableEntry = search(trieRoot, path);
     if (tableEntry && validSS[tableEntry->orignalSS->id])
     {
         // add the record to cache since it was not present before
         addFile(myCache, tableEntry);
-        printf("Record added to cache!\n");
-        return tableEntry->orignalSS;
+        // printf("Record added to cache!\n");
+        return tableEntry;
     }
     else
         return NULL;
 }
 
-void sendRequestToSS(struct ssDetails *ss, char *request)
+void addToRecords(struct record *r)
 {
-    int bytesSent = send(ss->connfd, request, sizeof(request), 0);
-    if (bytesSent == -1)
+    if (root == NULL)
     {
-        handleNetworkErrors("send");
+        return;
     }
+    
+    char *finalPath = strdup(r->path);
+    char *token = strtok(finalPath, "/");
+    struct record *parentNode = root;
+
+    while (token != NULL)
+    {
+        // Check if a child node with the same path already exists
+        char currPath[4096];
+        bzero(currPath, sizeof(currPath));
+
+        strcpy(currPath, parentNode->path);
+        if (strlen(currPath) != 0)
+        {
+            currPath[strlen(currPath)] = '/';
+        }
+
+        strcpy(currPath + strlen(currPath), token);
+
+        // printf("Curr path: %s\n", currPath);
+        struct record *child = parentNode->firstChild;
+        while (child != NULL)
+        {
+            if (strcmp(child->path, currPath) == 0)
+            {
+                break;
+            }
+            child = child->nextSibling;
+        }
+
+        if (child == NULL)
+        {
+            r->nextSibling = parentNode->firstChild;
+            if (parentNode->firstChild != NULL)
+            {
+                parentNode->firstChild->prevSibling = r;
+            }
+            parentNode->firstChild = r;
+            r->parent = parentNode;
+            parentNode = r;
+        }
+        else
+        {
+            parentNode = child;
+        }
+
+        token = strtok(NULL, "/");
+    }
+    insertRecordToTrie(trieRoot, r);
+    return;
+}
+
+void removeFromRecords(char *path)
+{
+    pthread_mutex_lock(&recordsLock);
+    struct record *r = getRecord(path);
+    removeFileFromCache(myCache, path);
+    deleteTrieNode(trieRoot, path);
+
+    if (r->prevSibling != NULL)
+    {
+        r->prevSibling->nextSibling = r->nextSibling;
+        if (r->nextSibling != NULL)
+        {
+            r->nextSibling->prevSibling = r->prevSibling;
+        }
+    }
+    else
+    {
+        r->parent->firstChild = r->nextSibling;
+        if (r->nextSibling != NULL)
+        {
+            r->nextSibling->prevSibling = NULL;
+        }
+    }
+    free(r->path);
+    free(r);
+    // r = NULL;
+    pthread_mutex_unlock(&recordsLock);
 }
 
 void *acceptClientRequests(void *args)
 {
     struct cDetails *cli = (struct cDetails *)args;
+    int bytesRecv, bytesSent;
     while (1)
     {
         // recieve the client request
         char request[4096];
         bzero(request, sizeof(request));
-        int bytesRecv = recv(cli->connfd, request, sizeof(request), 0);
+        bytesRecv = recv(cli->connfd, request, sizeof(request), 0);
         if (bytesRecv == -1)
         {
             handleNetworkErrors("recv");
@@ -73,41 +153,100 @@ void *acceptClientRequests(void *args)
             break;
         }
 
-        printf("Recieved from client - \'%s\'\n", request);
+        printf(YELLOW_COLOR"Comamnd from client %d- \'%s\'\n" RESET_COLOR, cli->id, request);
         // struct ssDetails *ss = &storageServers[atoi(request)];
 
-        struct ssDetails *ss = getRecord(request);
+        // char *request_command = strtok(request, " \t\n");
+        // char *path = strtok(NULL, " \t\n");
+        char *arg_arr[3];
+        parse_input(arg_arr, request);
+        char *request_command = arg_arr[0];
 
-        printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
-        sendRequestToSS(ss, request);
-
-        // send storage server details
-        int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
-        if (bytesSent == -1)
+        if (strcmp(request_command, "RMFILE") == 0)
         {
-            handleNetworkErrors("send");
+            // RMFILE path
+            struct record *r = getRecord(arg_arr[1]);
+            if (r == NULL)
+            {
+                // sending ack status to client
+                printf("record not found");
+                bytesSent = send(cli->connfd, "ERROR IN EXECUTION", sizeof("ERROR IN EXECUTION"), 0);
+                if (bytesSent == -1)
+                {
+                    handle_errors("send"); // error
+                }
+                continue;
+            }
+
+            struct ssDetails *ss = r->orignalSS;
+
+            // sending to ss
+            bytesSent = send(ss->connfd, request, sizeof(request), 0);
+            if (bytesSent == -1)
+            {
+                handleNetworkErrors("send");
+            }
+
+            char buffer[4096];
+            bzero(buffer, sizeof(buffer));
+            // receiving ack status from ss
+            bytesRecv = recv(ss->connfd, buffer, sizeof(buffer), 0);
+            if (bytesRecv == -1)
+            {
+                handle_errors("recv");
+            }
+            // printf("Recieved from SS\n%s\n\n", buffer); // error to be printed
+            if (strcmp(buffer, "SUCCESS IN EXECUTION") == 0)
+            {
+			printf(YELLOW_COLOR "Command executed\n" RESET_COLOR);
+                removeFromRecords(arg_arr[1]);
+            }
+            else{
+			printf(YELLOW_COLOR "Command failed\n" RESET_COLOR);
+
+            }
+            // sending ack status to client
+            bytesSent = send(cli->connfd, buffer, sizeof(buffer), 0);
+            if (bytesSent == -1)
+            {
+                handle_errors("send"); // error
+            }
+
+            // printf("Request over\n");
+
+            continue;
         }
+
+        else if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)
+        {
+            // ack
+            // char buffer[1000];
+            // int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
+
+            // if (bytesRecv == -1)
+            // {
+            // 	handle_errors("recv");
+            // }
+            // printf("Recieved from NM\n%s\n\n", buffer);
+        }
+        // struct ssDetails *ss = getRecord(path)->orignalSS;
+
+        // printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
+        // sendRequestToSS(ss, request);
+
+        // // send storage server details
+        // int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
+        // if (bytesSent == -1)
+        // {
+        //     handleNetworkErrors("send");
+        // }
 
         printf("sent ss detials to client\n");
     }
     return NULL;
 }
 
-void removeFromRecord(char *path)
-{
-    pthread_mutex_lock(&recordsLock);
-    for (int i = 0; i < 10000; i++)
-    {
-        if (records[i].isValid && strcmp(records[i].path, path) == 0)
-        {
-            records[i].isValid = false;
-            break;
-        }
-    }
-    pthread_mutex_unlock(&recordsLock);
-}
-
-void *addToRecord(void *args)
+void *addPaths(void *args)
 {
     while (1)
     {
@@ -130,27 +269,34 @@ void *addToRecord(void *args)
             break;
         }
         pthread_mutex_lock(&recordsLock);
-        int i = recordCount;
 
-        records[i].size = det.size;
-        records[i].isValid = true;
-        records[i].backupSS1 = NULL;
-        records[i].backupSS2 = NULL;
-        strcpy(records[i].currentPerms, det.perms);
-        strcpy(records[i].originalPerms, det.perms);
-        records[i].isDir = det.isDir;
-        records[i].orignalSS = ss;
-        records[i].path = malloc(sizeof(char) * 4096);
-        strcpy(records[i].path, det.path);
+        // if (getRecord(det.path)!=NULL)
+        // {
+        //     continue;
+        // }
+        
+        struct record *r = malloc(sizeof(struct record));
 
-        printf(BLUE_COLOR "Added %s as accessible path in Storage Server %d\nPermissions: %s\n" RESET_COLOR, records[i].path, records[i].orignalSS->id, records[i].originalPerms);
+        r->path = malloc(sizeof(char) * 4096);
+        strcpy(r->path, det.path);
+        r->orignalSS = ss;
+        strcpy(r->originalPerms, det.perms);
+        r->isDir = det.isDir;
+        strcpy(r->currentPerms, det.perms);
+        r->backupSS1 = NULL;
+        r->backupSS2 = NULL;
+        r->size = det.size;
+        r->creationTime = time(NULL);
+        r->lastModifiedTime = time(NULL);
 
-        insertRecordToTrie(root, &records[i]);
-        while (!records[recordCount].isValid)
-        {
-            recordCount++;
-            recordCount %= 10000;
-        }
+        r->firstChild = NULL;
+        r->nextSibling = NULL;
+        r->parent = NULL;
+        r->prevSibling = NULL;
+
+        addToRecords(r);
+
+        printf(BLUE_COLOR "Added %s as accessible path in Storage Server %d\nPermissions: %s\n" RESET_COLOR, r->path, r->orignalSS->id, r->originalPerms);
         pthread_mutex_unlock(&recordsLock);
     }
 
@@ -209,7 +355,7 @@ void addStorageServer(int connfd)
     printf(YELLOW_COLOR "[+] Storage Server %d Joined from %s:%d\n    Port for Client Communication: %d\n" RESET_COLOR, storageServers[storageServerCount].id, storageServers[storageServerCount].ip, storageServers[storageServerCount].nmPort, storageServers[storageServerCount].cliPort);
 
     pthread_t addpathThread;
-    pthread_create(&addpathThread, NULL, addToRecord, (void *)&storageServers[storageServerCount]);
+    pthread_create(&addpathThread, NULL, addPaths, (void *)&storageServers[storageServerCount]);
 }
 
 void *acceptHost(void *args)
@@ -310,14 +456,18 @@ int main(int argc, char *argv[])
     }
     int port = atoi(argv[1]);
     nmSock = initializeNamingServer(port);
-    root = initTrieNode();
+    trieRoot = initTrieNode();
     myCache = initCache();
+    root = malloc(sizeof(struct record));
+    root->firstChild = NULL;
+    root->nextSibling = NULL;
+    root->path = malloc(sizeof(char) * 1);
+    root->path[0] = '\0';
 
     for (int i = 0; i < 10000; i++)
     {
         validCli[i] = false;
         validSS[i] = false;
-        records[i].isValid = false;
     }
     int rc = pthread_mutex_init(&hostLock, NULL);
     assert(rc == 0);
