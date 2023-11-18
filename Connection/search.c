@@ -47,7 +47,7 @@ struct record *search(TrieNode *root, char *file_path)
         }
         temp = temp->children[index];
     }
-    if (temp->tableEntry)
+    if (temp->tableEntry && temp->tableEntry->isValid)
     {
         printf("File is located at %s in SS where IP: %s, Port: %d\n", temp->tableEntry->path, temp->tableEntry->orignalSS->ip, temp->tableEntry->orignalSS->cliPort);
         return temp->tableEntry;

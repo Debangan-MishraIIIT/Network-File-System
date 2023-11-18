@@ -109,7 +109,7 @@ struct record *searchFileInCache(LRUCache *myCache, char *filePath)
 
     while (temp != NULL)
     {
-        if (strcmp(temp->tableEntry->path, filePath) == 0)
+        if (temp->tableEntry->isValid && strcmp(temp->tableEntry->path, filePath) == 0)
         {
             moveCelltoStart(myCache, temp);
             printf("Retrieved from cache!\n");

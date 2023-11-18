@@ -17,6 +17,7 @@
 #include <semaphore.h>
 #include <pthread.h>
 #include <assert.h>
+#include <errno.h>
 
 #include "socket.h"
 #include "api.h"
@@ -66,6 +67,7 @@ struct accessibleFile
 
 struct record
 {
+    bool isValid;
     char * path;
     struct ssDetails *orignalSS;
     char originalPerms[11];

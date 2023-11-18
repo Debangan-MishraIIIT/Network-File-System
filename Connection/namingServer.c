@@ -25,13 +25,11 @@ struct ssDetails *getRecord(char *path)
     // first check if path exists in cache or not
     tableEntry = searchFileInCache(myCache, path);
     // printCache(myCache);
-    if (tableEntry)
+    if (tableEntry && validSS[tableEntry->orignalSS->id])
         return tableEntry->orignalSS;
 
-    // printf("LOL!\n");
-
     tableEntry = search(root, path);
-    if (tableEntry)
+    if (tableEntry && validSS[tableEntry->orignalSS->id])
     {
         // add the record to cache since it was not present before
         addFile(myCache, tableEntry);
@@ -95,6 +93,20 @@ void *acceptClientRequests(void *args)
     return NULL;
 }
 
+void removeFromRecord(char *path)
+{
+    pthread_mutex_lock(&recordsLock);
+    for (int i = 0; i < 10000; i++)
+    {
+        if (records[i].isValid && strcmp(records[i].path, path) == 0)
+        {
+            records[i].isValid = false;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&recordsLock);
+}
+
 void *addToRecord(void *args)
 {
     while (1)
@@ -121,7 +133,7 @@ void *addToRecord(void *args)
         int i = recordCount;
 
         records[i].size = det.size;
-
+        records[i].isValid = true;
         records[i].backupSS1 = NULL;
         records[i].backupSS2 = NULL;
         strcpy(records[i].currentPerms, det.perms);
@@ -131,10 +143,14 @@ void *addToRecord(void *args)
         records[i].path = malloc(sizeof(char) * 4096);
         strcpy(records[i].path, det.path);
 
-        printf(BLUE_COLOR"Added %s as accessible path in Storage Server %d\nPermissions: %s\n"RESET_COLOR, records[i].path, records[i].orignalSS->id, records[i].originalPerms);
+        printf(BLUE_COLOR "Added %s as accessible path in Storage Server %d\nPermissions: %s\n" RESET_COLOR, records[i].path, records[i].orignalSS->id, records[i].originalPerms);
 
         insertRecordToTrie(root, &records[i]);
-        recordCount++;
+        while (!records[recordCount].isValid)
+        {
+            recordCount++;
+            recordCount %= 10000;
+        }
         pthread_mutex_unlock(&recordsLock);
     }
 
@@ -301,6 +317,7 @@ int main(int argc, char *argv[])
     {
         validCli[i] = false;
         validSS[i] = false;
+        records[i].isValid = false;
     }
     int rc = pthread_mutex_init(&hostLock, NULL);
     assert(rc == 0);

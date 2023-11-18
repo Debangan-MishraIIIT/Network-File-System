@@ -8,7 +8,7 @@ int joinSS(struct ssDetails ss)
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1)
 	{
-		perror("socket");
+		handleNetworkErrors("socket");
 		exit(0);
 	}
 	bzero(&servaddr, sizeof(servaddr));
@@ -19,7 +19,7 @@ int joinSS(struct ssDetails ss)
 
 	if (connect(sockfd, (SA *)&servaddr, sizeof(servaddr)) != 0)
 	{
-		perror("connect");
+		handleNetworkErrors("connect");
 		exit(0);
 	}
 	return sockfd;
@@ -30,12 +30,31 @@ int sendRequest(char *input, int sockfd)
 	// send request
 	char request[4096];
 	strcpy(request, input);
-	// printf("req: %s\nin: %s\n", request, input);
-	// printf(".%d,%d,\n", strlen(request), strlen(input));
+
+	char *request_command = strtok(input, " \t\n");
+
+	if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)
+	{
+		// ack
+		// char buffer[1000];
+		// int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
+
+		// if (bytesRecv == -1)
+		// {
+		// 	handle_errors("recv");
+		// }
+		// printf("Recieved from NM\n%s\n\n", buffer);
+	}
+	else
+	{
+		printf(RED_COLOR "Invalid Input!\n" RESET_COLOR);
+		return 0;
+	}
+
 	int bytesSent = send(sockfd, request, strlen(request), 0);
 	if (bytesSent == -1)
 	{
-		perror("send");
+		handleNetworkErrors("send");
 	}
 	if (bytesSent == 0)
 	{
@@ -43,23 +62,18 @@ int sendRequest(char *input, int sockfd)
 		return -1;
 	}
 
-	// printf("here");
 	// recieve the storage server details
 	struct ssDetails ss;
 	int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
-	if (ss.id <= 0)
+	if ((ss.id <= 0) || bytesRecv == 0 || (bytesRecv == -1 && errno == ECONNRESET))
 	{
 		// nm has disconnected
 		return -1;
 	}
-
 	if (bytesRecv == -1)
 	{
-		perror("recv");
-	}
-	if (bytesRecv == 0)
-	{
-		return -1;
+		handleNetworkErrors("recv");
+		return 0;
 	}
 
 	printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
@@ -68,7 +82,7 @@ int sendRequest(char *input, int sockfd)
 	bytesSent = send(connfd, request, sizeof(request), 0);
 	if (bytesSent == -1)
 	{
-		perror("recv");
+		handleNetworkErrors("recv");
 	}
 	printf("\'%s\' sent to SS %s:%d\n", request, ss.ip, ss.cliPort);
 	return 0;
@@ -82,7 +96,8 @@ int joinNamingServerAsClient(char *ip, int port)
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1)
 	{
-		perror("socket");
+		// perror("socket");
+		handleNetworkErrors("socket");
 		exit(0);
 	}
 	bzero(&servaddr, sizeof(servaddr));
@@ -93,7 +108,8 @@ int joinNamingServerAsClient(char *ip, int port)
 
 	if (connect(sockfd, (SA *)&servaddr, sizeof(servaddr)) != 0)
 	{
-		perror("connect");
+		// perror("connect");
+		handleNetworkErrors("connect");
 		exit(0);
 	}
 
@@ -101,14 +117,14 @@ int joinNamingServerAsClient(char *ip, int port)
 	int bytesSent = send(sockfd, joinMsg, sizeof(joinMsg), 0);
 	if (bytesSent == -1)
 	{
-		perror("send");
+		handleNetworkErrors("send");
 	}
 
 	char buffer[4096];
 	int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
 	if (bytesRecv == -1)
 	{
-		perror("recv");
+		handleNetworkErrors("recv");
 	}
 	if (strcmp(buffer, "ACCEPTED JOIN") != 0)
 	{
@@ -183,7 +199,7 @@ int main(int argc, char *argv[])
 		}
 		if (status == 0)
 		{
-			printf("Successful Request \n");
+			printf("Request Over\n");
 		}
 		free(input);
 	}
