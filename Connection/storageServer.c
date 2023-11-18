@@ -1,6 +1,6 @@
 #include "headers.h"
 // there should be an inifinite thread in the NS side that also checks and updates the paths
-
+int nmSock1;
 void convertPermissions(mode_t st_mode, char *perms)
 {
 	perms[0] = (S_ISDIR(st_mode)) ? 'd' : '-';
@@ -16,13 +16,16 @@ void convertPermissions(mode_t st_mode, char *perms)
 	perms[10] = '\0'; // Null-terminate the string
 }
 
-void sendPathToNS(char *path, char perms[11], size_t size, int nmSock)
+void sendPathToNS(char *path, char perms[11], size_t size, int nmSock, time_t lastModifiedTime, time_t lastAccessTime)
 {
 	struct fileDetails *det = (struct fileDetails *)malloc(sizeof(struct fileDetails));
 	strcpy(det->path, path);
 	strcpy(det->perms, perms);
 	det->size = size;
 	det->isDir = perms[0] == '-' ? false : true;
+	det->lastAccessTime = lastAccessTime;
+	det->lastModifiedTime = lastModifiedTime;
+	strcpy(det->fileName, basename(path));
 
 	int bytesSent = send(nmSock, det, sizeof(struct fileDetails), 0);
 	if (bytesSent == -1)
@@ -51,27 +54,6 @@ void *takeInputsDynamically(void *args)
 		char *path = strtok(NULL, " \n");
 		if (check_path_exists(path))
 		{
-			// // send all parent directories
-			// char *parentPath = strdup(path);
-			// char *slashPos = strrchr(parentPath, '/');
-			// while (slashPos != NULL)
-			// {
-			// 	*slashPos = '\0'; // Replace the slash with null character to get the parent path
-			// 	struct stat dirStat;
-			// 	int r = stat(parentPath, &dirStat);
-			// 	if (r == -1)
-			// 	{
-			// 		fprintf(stderr, "File error\n");
-			// 		exit(1);
-			// 	}
-			// 	char perms[11];
-			// 	convertPermissions(dirStat.st_mode, perms);
-			// 	size_t size = dirStat.st_size;
-			// 	sendPathToNS(parentPath, perms, size, nmSock);
-			// 	slashPos = strrchr(parentPath, '/'); // Find the next slash
-			// }
-			// free(parentPath);
-
 			// send given file
 			struct stat dirStat;
 			int r = stat(path, &dirStat);
@@ -83,7 +65,7 @@ void *takeInputsDynamically(void *args)
 			char perms[11];
 			convertPermissions(dirStat.st_mode, perms);
 			size_t size = dirStat.st_size;
-			sendPathToNS(path, perms, size, nmSock);
+			sendPathToNS(path, perms, size, nmSock, dirStat.st_mtime, dirStat.st_atime);
 		}
 		else
 		{
@@ -164,6 +146,93 @@ void *serveClient_Request(void *args)
 	}
 
 	printf("Recieved from client: %s\n", buffer);
+	char *arg_arr[3];
+	parse_input(arg_arr, buffer);
+	char *request_command = arg_arr[0];
+
+	if (strcmp(arg_arr[0], "WRITE") == 0)
+	{
+		struct stat fileStat;
+		int r = stat(arg_arr[1], &fileStat);
+		if (r == -1)
+		{
+			fprintf(stderr, "File error\n");
+			exit(1);
+		}
+		char perms[11];
+		convertPermissions(fileStat.st_mode, perms);
+
+		// send the perms first
+		bytesRecv = send(connfd, perms, sizeof(perms), 0);
+		if (bytesRecv == -1)
+		{
+			handleNetworkErrors("recv");
+		}
+
+		// send the file to client
+		if (!sendFile(arg_arr[1], connfd))
+			printf("SS: sent the file to client\n");
+		else
+			printf(RED "File not sent\n" reset);
+	}
+	else if (strcmp(arg_arr[0], "READ") == 0)
+	{
+		struct stat fileStat;
+		int r = stat(arg_arr[1], &fileStat);
+		if (r == -1)
+		{
+			fprintf(stderr, "File error\n");
+			exit(1);
+		}
+		char perms[11];
+		convertPermissions(fileStat.st_mode, perms);
+
+		// send the perms first
+		bytesRecv = send(connfd, perms, sizeof(perms), 0);
+		if (bytesRecv == -1)
+		{
+			handleNetworkErrors("recv");
+		}
+
+		// send the file to client
+		if (!sendFile(arg_arr[1], connfd))
+			printf("SS: sent the file to client\n");
+		else
+			printf(RED "File not sent\n" reset);
+	}
+	else if (strcmp(arg_arr[0], "FILEINFO") == 0)
+	{
+		if (!check_path_exists(arg_arr[1]))
+		{
+			printf("file not found"); // error
+			return NULL;
+		}
+		else
+		{
+			if (isDirectory(arg_arr[1]))
+			{
+				printf("directory path given instead of file"); // error
+				return NULL;
+			}
+			else
+			{
+				struct stat dirStat;
+				int r = stat(arg_arr[1], &dirStat);
+				if (r == -1)
+				{
+					fprintf(stderr, "File error\n");
+					exit(1);
+				}
+				char perms[11];
+				convertPermissions(dirStat.st_mode, perms);
+				size_t size = dirStat.st_size;
+				// since it is connfd, this sends the file details to client
+				sendPathToNS(arg_arr[1], perms, size, connfd, dirStat.st_mtime, dirStat.st_atime);
+				printf("SS: sent the file details to client\n");
+			}
+		}
+		return NULL;
+	}
 	return NULL;
 }
 
@@ -341,8 +410,8 @@ int main(int argc, char *argv[])
 	int cliSock = initialzeClientsConnection(cliPort);
 	printf(GREEN_COLOR "[+] Storage Server Initialized\n" RESET_COLOR);
 
-	int nmSock1 = initializeNMConnection("127.0.0.1", mainPort, nmPort, cliPort); // for feedback transfer
-	int nmSock2 = initializeNMConnectionForRecords("127.0.0.1", mainPort);		  // for records
+	nmSock1 = initializeNMConnection("127.0.0.1", mainPort, nmPort, cliPort); // for feedback transfer
+	int nmSock2 = initializeNMConnectionForRecords("127.0.0.1", mainPort);	  // for records
 
 	printf(GREEN_COLOR "[+] Connected to Naming Server\n" RESET_COLOR);
 	printf(YELLOW_COLOR "Port For NM Communication: %d\nPort for Client Communication: %d\n" RESET_COLOR, nmPort, cliPort);

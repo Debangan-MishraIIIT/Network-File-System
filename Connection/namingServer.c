@@ -47,7 +47,7 @@ void addToRecords(struct record *r)
     {
         return;
     }
-    
+
     char *finalPath = strdup(r->path);
     char *token = strtok(finalPath, "/");
     struct record *parentNode = root;
@@ -153,7 +153,7 @@ void *acceptClientRequests(void *args)
             break;
         }
 
-        printf(YELLOW_COLOR"Comamnd from client %d- \'%s\'\n" RESET_COLOR, cli->id, request);
+        printf(YELLOW_COLOR "Comamnd from client %d- \'%s\'\n" RESET_COLOR, cli->id, request);
         // struct ssDetails *ss = &storageServers[atoi(request)];
 
         // char *request_command = strtok(request, " \t\n");
@@ -198,12 +198,12 @@ void *acceptClientRequests(void *args)
             // printf("Recieved from SS\n%s\n\n", buffer); // error to be printed
             if (strcmp(buffer, "SUCCESS IN EXECUTION") == 0)
             {
-			printf(YELLOW_COLOR "Command executed\n" RESET_COLOR);
+                printf(YELLOW_COLOR "Command executed\n" RESET_COLOR);
                 removeFromRecords(arg_arr[1]);
             }
-            else{
-			printf(YELLOW_COLOR "Command failed\n" RESET_COLOR);
-
+            else
+            {
+                printf(YELLOW_COLOR "Command failed\n" RESET_COLOR);
             }
             // sending ack status to client
             bytesSent = send(cli->connfd, buffer, sizeof(buffer), 0);
@@ -216,7 +216,6 @@ void *acceptClientRequests(void *args)
 
             continue;
         }
-
         else if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)
         {
             // ack
@@ -229,19 +228,57 @@ void *acceptClientRequests(void *args)
             // }
             // printf("Recieved from NM\n%s\n\n", buffer);
         }
-        // struct ssDetails *ss = getRecord(path)->orignalSS;
+        else if (strcmp(request_command, "WRITE") == 0)
+        {
+            char path[1000];
+            strcpy(path, arg_arr[1]);
+            printf("NM: client requested path %s\n", path);
+            struct ssDetails *ss = getRecord(path)->orignalSS;
 
-        // printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
-        // sendRequestToSS(ss, request);
+            printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
 
-        // // send storage server details
-        // int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
-        // if (bytesSent == -1)
-        // {
-        //     handleNetworkErrors("send");
-        // }
+            // send storage server details
+            int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
+            if (bytesSent == -1)
+            {
+                handleNetworkErrors("send");
+            }
+            printf("sent ss detials to client\n");
+        }
+        else if (strcmp(request_command, "READ") == 0)
+        {
+            char path[1000];
+            strcpy(path, arg_arr[1]);
+            printf("NM: client requested path %s\n", path);
+            struct ssDetails *ss = getRecord(path)->orignalSS;
 
-        printf("sent ss detials to client\n");
+            printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
+
+            // send storage server details
+            int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
+            if (bytesSent == -1)
+            {
+                handleNetworkErrors("send");
+            }
+            printf("sent ss detials to client\n");
+        }
+        else if (strcmp(request_command, "FILEINFO") == 0)
+        {
+            char path[1000];
+            strcpy(path, arg_arr[1]);
+            printf("NM: client requested path %s\n", path);
+            struct ssDetails *ss = getRecord(path)->orignalSS;
+
+            printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
+
+            // send storage server details
+            int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
+            if (bytesSent == -1)
+            {
+                handleNetworkErrors("send");
+            }
+            printf("sent ss detials to client\n");
+        }
     }
     return NULL;
 }
@@ -274,7 +311,7 @@ void *addPaths(void *args)
         // {
         //     continue;
         // }
-        
+
         struct record *r = malloc(sizeof(struct record));
 
         r->path = malloc(sizeof(char) * 4096);
@@ -286,8 +323,6 @@ void *addPaths(void *args)
         r->backupSS1 = NULL;
         r->backupSS2 = NULL;
         r->size = det.size;
-        r->creationTime = time(NULL);
-        r->lastModifiedTime = time(NULL);
 
         r->firstChild = NULL;
         r->nextSibling = NULL;

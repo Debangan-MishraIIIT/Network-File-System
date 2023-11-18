@@ -464,7 +464,6 @@ void file_separator(char *array[], char *inputS)
     }
 }
 
-
 int removeFile(char *path)
 {
     if (!check_path_exists(path))
@@ -484,10 +483,215 @@ int removeFile(char *path)
             int ret = remove(path);
             if (ret == -1)
             {
-                printf("remvove sys call failed\n"); //error
+                printf("remvove sys call failed\n"); // error
                 return -1;
             }
         }
     }
     return 0;
+}
+
+int writeFile(char *path, char *editor)
+{
+    if (!check_path_exists(path))
+    {
+        // printf("file not found"); // error
+        return -1;
+    }
+    else
+    {
+        if (!isDirectory(path))
+        {
+            int fd = open(path, O_WRONLY | O_APPEND);
+            pid_t pid = fork();
+            if (pid == 0) // Child process
+            {
+                char *editor_args[] = {editor, path, NULL};
+                if (execvp(editor, editor_args) == -1)
+                {
+                    perror("execvp");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            else // Parent process
+            {
+                int status;
+                waitpid(pid, &status, 0);
+            }
+        }
+        else
+        {
+            printf(RED "path for writing is a directory\n" reset);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int readFile(char *path, char *editor)
+{
+    if (!check_path_exists(path))
+    {
+        // printf("file not found"); // error
+        return -1;
+    }
+    else
+    {
+        if (!isDirectory(path))
+        {
+            int fd = open(path, O_RDONLY);
+            pid_t pid = fork();
+            if (pid == 0) // Child process
+            {
+                char *editor_args[] = {editor, path, NULL};
+                if (execvp(editor, editor_args) == -1)
+                {
+                    perror("execvp");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            else // Parent process
+            {
+                int status;
+                waitpid(pid, &status, 0);
+            }
+        }
+        else
+        {
+            printf(RED "path for writing is a directory\n" reset);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int sendFile(char *path, int sockfd)
+{
+
+    if (isDirectory(path))
+    {
+        printf(RED "File Requested is a directory\n" reset);
+        return -1;
+    }
+
+    int fd = open(path, O_RDONLY);
+    if (fd == -1)
+    {
+        perror("open");
+        return -1;
+    }
+
+    char buf[MAX_SIZE];
+    ssize_t bytes_read = read(fd, buf, MAX_SIZE);
+
+    while (bytes_read > 0)
+    {
+        ssize_t resp = write(sockfd, buf, bytes_read);
+        if (resp == -1)
+        {
+            perror("write");
+            return -1;
+        }
+
+        // Wait for acknowledgment from the client
+        char recACK[MAX_SIZE];
+        ssize_t ack_resp = read(sockfd, recACK, MAX_SIZE);
+        if (ack_resp == -1)
+        {
+            perror("read ACK");
+            return -1;
+        }
+
+        bzero(buf, MAX_SIZE);
+        bytes_read = read(fd, buf, MAX_SIZE);
+    }
+
+    if (bytes_read == -1)
+    {
+        perror("read");
+        return -1;
+    }
+
+    close(fd);
+
+    // Send "STOP" signal
+    char stopSignal[MAX_SIZE];
+    strcpy(stopSignal, "STOP");
+    ssize_t stop_resp = write(sockfd, stopSignal, strlen(stopSignal));
+
+    if (stop_resp == -1)
+    {
+        perror("write stop");
+        return -1;
+    }
+
+    return 0; // Success
+}
+
+int receiveFile(char *path, int sockfd)
+{
+    int fd = open(path, O_WRONLY | O_CREAT, 0644);
+    if (fd == -1)
+    {
+        perror("open");
+        return -1;
+    }
+
+    char buf[MAX_SIZE];
+    ssize_t bytes_read = read(sockfd, buf, MAX_SIZE);
+
+    while (bytes_read > 0)
+    {
+        ssize_t resp = write(fd, buf, bytes_read);
+
+        // Send acknowledgment to the server
+        char sendACK[MAX_SIZE] = "ACK";
+        ssize_t ack_resp = write(sockfd, sendACK, strlen(sendACK));
+
+        if (strstr(buf, "STOP"))
+            break;
+
+        if (resp == -1 || ack_resp == -1)
+        {
+            perror("write");
+            return -1;
+        }
+
+        bzero(buf, MAX_SIZE);
+        bytes_read = read(sockfd, buf, MAX_SIZE);
+    }
+
+    if (bytes_read == -1)
+    {
+        perror("read");
+        return -1;
+    }
+
+    close(fd);
+    return 0; // Success
+}
+
+mode_t reversePermissions(char *perms)
+{
+    mode_t mode = 0;
+
+    // Check if the file is a directory
+    mode |= (perms[0] == 'd') ? S_IFDIR : 0;
+
+    // Owner permissions
+    mode |= (perms[1] == 'r') ? S_IRUSR : 0;
+    mode |= (perms[2] == 'w') ? S_IWUSR : 0;
+    mode |= (perms[3] == 'x') ? S_IXUSR : 0;
+
+    // Group permissions
+    mode |= (perms[4] == 'r') ? S_IRGRP : 0;
+    mode |= (perms[5] == 'w') ? S_IWGRP : 0;
+    mode |= (perms[6] == 'x') ? S_IXGRP : 0;
+
+    // Others permissions
+    mode |= (perms[7] == 'r') ? S_IROTH : 0;
+    mode |= (perms[8] == 'w') ? S_IWOTH : 0;
+    mode |= (perms[9] == 'x') ? S_IXOTH : 0;
+
+    return mode;
 }

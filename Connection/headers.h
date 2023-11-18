@@ -18,6 +18,8 @@
 #include <pthread.h>
 #include <assert.h>
 #include <errno.h>
+#include <sys/wait.h>
+#include <libgen.h>
 
 #include "socket.h"
 #include "api.h"
@@ -75,8 +77,6 @@ struct record
     struct ssDetails *backupSS1;
     struct ssDetails *backupSS2;
     size_t size;
-    time_t creationTime;
-    time_t lastModifiedTime;
 
     // for n-ary tree
     struct record *firstChild;
@@ -88,8 +88,11 @@ struct record
 struct fileDetails
 {
     char path[4096];
+    char fileName[4096];
     char perms[11];
     size_t size;
     bool isDir;
+    time_t lastAccessTime;
+    time_t lastModifiedTime;
 };
 #endif
