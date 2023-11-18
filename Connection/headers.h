@@ -16,6 +16,7 @@
 #include <dirent.h>
 #include <semaphore.h>
 #include <pthread.h>
+#include <sys/wait.h>
 //changes
 #include <sys/stat.h>
 

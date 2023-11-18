@@ -120,6 +120,27 @@ struct record *searchFileInCache(LRUCache *myCache, char *filePath)
     return NULL;
 }
 
+int removeFileFromCache(LRUCache *myCache, char *filePath)
+{
+    cacheCell *temp = myCache->head;
+
+    while (temp != NULL)
+    {
+        if (strcmp(temp->next->tableEntry->path, filePath) == 0)
+        {
+            // moveCelltoStart(myCache, temp);
+            cacheCell *temp2 = temp->next;
+            temp->next = temp->next->next;
+            myCache->numFiles--;
+            printf("Deleted from cache!\n");
+            free(temp2);
+            return 1;
+        }
+        temp = temp->next;
+    }
+    return 0;
+}
+
 void freeCache(LRUCache *myCache)
 {
     cacheCell *temp = myCache->head;

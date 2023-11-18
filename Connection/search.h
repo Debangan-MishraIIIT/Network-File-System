@@ -12,5 +12,6 @@ typedef struct TrieNode
 TrieNode *initTrieNode();
 void insertRecordToTrie(TrieNode *root, struct record *newTableEntry);
 struct record *search(TrieNode *root, char *file_path);
+int deleteTrieNode(TrieNode *root, char *file_path);
 
 #endif

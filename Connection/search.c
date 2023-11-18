@@ -31,6 +31,36 @@ void insertRecordToTrie(TrieNode *root, struct record *newTableEntry)
     temp->tableEntry = newTableEntry;
 }
 
+int deleteTrieNode(TrieNode *root, char *file_path)
+{
+    TrieNode *temp = root;
+    TrieNode *prev = NULL;
+    int i;
+    for (i = 0; file_path[i] != '\0'; i++)
+    {
+        int index = (int)file_path[i];
+        if (temp->children[index] == NULL)
+        {
+            return 0;
+        }
+        prev = temp;
+        temp = temp->children[index];
+    }
+
+    // If the TrieNode has a table entry, delete it
+    if (temp->tableEntry)
+    {
+        free(temp->tableEntry);
+        temp->tableEntry = NULL;
+    }
+
+    // Remove the TrieNode from its parent
+    free(prev->children[(int)file_path[i - 1]]);
+    prev->children[(int)file_path[i - 1]] = NULL;
+
+    return 1;
+}
+
 // can modify the search algo accordingly to return appropriate values.
 // NULL if file not found, a struct which contains the ip and port or something.
 struct record *search(TrieNode *root, char *file_path)

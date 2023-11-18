@@ -403,7 +403,17 @@ int handle_naming_server_commands(char *command, char *inputS, int nmfd)
         else if (strcmp(command, "COPYDIR") == 0 || strcmp(command, "COPYFILE") == 0)
         {
             //
-            printf("last token 2: %s\n", lastToken);
+            char temp_send_buffer[1024];
+            char temp_recv_buffer[1024];
+            bzero(temp_send_buffer, sizeof(temp_send_buffer));
+            bzero(temp_recv_buffer, sizeof(temp_recv_buffer));
+
+            snprintf(temp_send_buffer, maxlen, "dir %s", lastToken);
+            printf("%s\n", temp_send_buffer);
+            send(nmfd, temp_send_buffer, sizeof(temp_send_buffer), 0);
+            recv(nmfd, temp_recv_buffer, sizeof(temp_recv_buffer), 0);
+            printf("%s\n", temp_recv_buffer);
+
             int resp = recursive_directory_sending(lastToken, nmfd);
             if (resp == -1)
             {
