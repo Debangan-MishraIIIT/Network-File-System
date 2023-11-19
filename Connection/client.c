@@ -206,6 +206,7 @@ int sendRequest(char *input, int sockfd)
 		}
 
 		char editor[1000];
+		char editorList[4][100] = {"gedit", "vim", "nano", "emacs"};
 		while (1)
 		{
 			printf("Choose Editor to edit file:\n");
@@ -214,7 +215,7 @@ int sendRequest(char *input, int sockfd)
 			printf("3. nano\n");
 			// printf("4. code\n");
 			printf("4. emacs\n");
-			printf("5. none(edit locally)\n");
+			printf("5. none (edit locally)\n");
 			scanf("%s", editor);
 			if (!strcmp(editor, "gedit") || !strcmp(editor, "vim") || !strcmp(editor, "nano") || !strcmp(editor, "emacs") || !strcmp(editor, "none") || !strcmp(editor, "1") || !strcmp(editor, "2") || !strcmp(editor, "3") || !strcmp(editor, "4") || !strcmp(editor, "5") )
 			{
@@ -235,6 +236,10 @@ int sendRequest(char *input, int sockfd)
 		}
 		else
 		{
+			if (strlen(editor) == 1)
+			{
+				strcpy(editor, editorList[atoi(editor) - 1]);
+			}
 			if (writeFile(recvFileName, editor) == -1)
 			{
 				handleSYSErrors("write");
@@ -353,18 +358,17 @@ int sendRequest(char *input, int sockfd)
 		}
 
 		char editor[1000];
-		char editorList[6][100] = {"gedit", "vim", "nano", "code", "emacs", "cat"};
-		printf(YELLOW_COLOR "Choose Editor to read file:\n");
+		char editorList[5][100] = {"gedit", "vim", "nano", "emacs", "cat"};
+		printf(YELLOW_COLOR "Choose Editor to Read file:\n");
 		printf("1. gedit\n");
 		printf("2. vim\n");
 		printf("3. nano\n");
-		// printf("4. code\n");
 		printf("4. emacs\n");
 		printf("5. terminal\n" RESET_COLOR);
 		while (1)
 		{
 			scanf("%s", editor);
-			if (!strcmp(editor, "gedit") || !strcmp(editor, "vim") || !strcmp(editor, "nano") || !strcmp(editor, "code") || !strcmp(editor, "emacs") || !strcmp(editor, "none") || !strcmp(editor, "1") || !strcmp(editor, "2") || !strcmp(editor, "3") || !strcmp(editor, "4") || !strcmp(editor, "5") || !strcmp(editor, "6"))
+			if (!strcmp(editor, "gedit") || !strcmp(editor, "vim") || !strcmp(editor, "nano") || !strcmp(editor, "emacs") || !strcmp(editor, "none") || !strcmp(editor, "1") || !strcmp(editor, "2") || !strcmp(editor, "3") || !strcmp(editor, "4") || !strcmp(editor, "5"))
 			{
 				break;
 			}
