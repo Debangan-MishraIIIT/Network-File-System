@@ -122,6 +122,16 @@ int sendRequest(char *input, int sockfd)
 			printf(RED "Requested File is directory\n" reset);
 			return -2;
 		}
+		else if (perms[1] == '-')
+		{
+			printf(RED "Requested File does not have read permissions\n" reset);
+			return -2;
+		}
+		else if (perms[2] == '-')
+		{
+			printf(RED "Requested File does not have write permissions\n" reset);
+			return -2;
+		}
 
 		if (!receiveFile("temp.txt", connfd))
 		{
@@ -174,7 +184,7 @@ int sendRequest(char *input, int sockfd)
 			}
 		}
 
-		// send the file to ss 
+		// send the file to ss
 		if (!sendFile("temp.txt", connfd))
 		{
 			printf("sent the file to ss\n");
@@ -246,7 +256,12 @@ int sendRequest(char *input, int sockfd)
 			printf(RED "Requested File is directory\n" reset);
 			return -2;
 		}
-
+		else if (perms[1] == '-')
+		{
+			printf(RED "Requested File does not have read permissions\n" reset);
+			return -2;
+		}
+		
 		// disabling write permissions while reading
 		perms[2] = '-';
 
