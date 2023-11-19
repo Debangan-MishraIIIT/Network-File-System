@@ -1,20 +1,6 @@
 #include "headers.h"
 // there should be an inifinite thread in the NS side that also checks and updates the paths
 int nmSock1;
-void convertPermissions(mode_t st_mode, char *perms)
-{
-	perms[0] = (S_ISDIR(st_mode)) ? 'd' : '-';
-	perms[1] = (st_mode & S_IRUSR) ? 'r' : '-';
-	perms[2] = (st_mode & S_IWUSR) ? 'w' : '-';
-	perms[3] = (st_mode & S_IXUSR) ? 'x' : '-';
-	perms[4] = (st_mode & S_IRGRP) ? 'r' : '-';
-	perms[5] = (st_mode & S_IWGRP) ? 'w' : '-';
-	perms[6] = (st_mode & S_IXGRP) ? 'x' : '-';
-	perms[7] = (st_mode & S_IROTH) ? 'r' : '-';
-	perms[8] = (st_mode & S_IWOTH) ? 'w' : '-';
-	perms[9] = (st_mode & S_IXOTH) ? 'x' : '-';
-	perms[10] = '\0'; // Null-terminate the string
-}
 
 void sendPathToNS(char *path, char perms[11], size_t size, int nmSock, time_t lastModifiedTime, time_t lastAccessTime)
 {
@@ -162,7 +148,14 @@ void *serveNM_Requests(void *args)
 		else if (strcmp(request_command, "MKDIR") == 0)
 		{
 			// RMFILE path
-			status = makeDirectory(path);
+			char *perms = strtok(NULL, " \t\n");
+			if (perms == NULL)
+			{
+				perms = malloc(sizeof(char) * 1024);
+				strcpy(perms, "drwxr-xr-x");
+			}
+
+			status = makeDirectory(path, perms);
 			switch (status)
 			{
 			case 0:
@@ -215,7 +208,70 @@ void *serveNM_Requests(void *args)
 		else if (strcmp(request_command, "MKFILE") == 0)
 		{
 			// RMFILE path
-			status = makeFile(path);
+			char *perms = strtok(NULL, " \t\n");
+			if (perms == NULL)
+			{
+				perms = malloc(sizeof(char) * 1024);
+				strcpy(perms, "-rw-r--r--");
+			}
+
+			status = makeFile(path, perms);
+			switch (status)
+			{
+			case 0:
+				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				strcpy(statusMsg, "SUCCESS");
+				break;
+			case -1:
+				handleFileOperationError("file_not_found");
+				strcpy(statusMsg, "file_not_found");
+				break;
+			case -2:
+				handleFileOperationError("not_file");
+				strcpy(statusMsg, "not_file");
+				break;
+			case -3:
+				handleSYSErrors("creat");
+				strcpy(statusMsg, "creat");
+				break;
+			default:
+				break;
+			}
+		}
+		else if (strcmp(request_command, "WRITEFILE") == 0)
+		{
+			status = sendFileCopy(path, nmfd); // error
+			switch (status)
+			{
+			case 0:
+				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				strcpy(statusMsg, "SUCCESS");
+				break;
+			case -1:
+				handleFileOperationError("file_not_found");
+				strcpy(statusMsg, "file_not_found");
+				break;
+			case -2:
+				handleFileOperationError("not_file");
+				strcpy(statusMsg, "not_file");
+				break;
+			case -3:
+				handleSYSErrors("creat");
+				strcpy(statusMsg, "creat");
+				break;
+			default:
+				break;
+			}
+		}
+		else if (strcmp(request_command, "READFILE") == 0)
+		{
+			char *perms = strtok(NULL, " \t\n");
+			if (perms == NULL)
+			{
+				perms = malloc(sizeof(char) * 1024);
+				strcpy(perms, "-rw-r--r--");
+			}
+			status = receiveFileCopy(path, nmfd, perms); // error
 			switch (status)
 			{
 			case 0:
