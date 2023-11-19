@@ -586,16 +586,16 @@ int sendFile(char *path, int sockfd)
 
     while (bytes_read > 0)
     {
-        ssize_t resp = write(sockfd, buf, bytes_read);
+        ssize_t resp = send(sockfd, buf, bytes_read, 0);
         if (resp == -1)
         {
-            perror("write");
+            perror("send");
             return -1;
         }
 
         // Wait for acknowledgment from the client
         char recACK[MAX_SIZE];
-        ssize_t ack_resp = read(sockfd, recACK, MAX_SIZE);
+        ssize_t ack_resp = recv(sockfd, recACK, sizeof(recACK), 0);
         if (ack_resp == -1)
         {
             perror("read ACK");
@@ -638,18 +638,18 @@ int receiveFile(char *path, int sockfd)
     }
 
     char buf[MAX_SIZE];
-    ssize_t bytes_read = read(sockfd, buf, MAX_SIZE);
+    ssize_t bytes_read = recv(sockfd, buf, MAX_SIZE, 0);
 
     while (bytes_read > 0)
     {
+        if (strstr(buf, "STOP"))
+            break;
+
         ssize_t resp = write(fd, buf, bytes_read);
 
         // Send acknowledgment to the server
         char sendACK[MAX_SIZE] = "ACK";
-        ssize_t ack_resp = write(sockfd, sendACK, strlen(sendACK));
-
-        if (strstr(buf, "STOP"))
-            break;
+        ssize_t ack_resp = send(sockfd, sendACK, sizeof(sendACK), 0);
 
         if (resp == -1 || ack_resp == -1)
         {
@@ -658,7 +658,7 @@ int receiveFile(char *path, int sockfd)
         }
 
         bzero(buf, MAX_SIZE);
-        bytes_read = read(sockfd, buf, MAX_SIZE);
+        bytes_read = recv(sockfd, buf, MAX_SIZE, 0);
     }
 
     if (bytes_read == -1)

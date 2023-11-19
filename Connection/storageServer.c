@@ -174,6 +174,16 @@ void *serveClient_Request(void *args)
 			printf("SS: sent the file to client\n");
 		else
 			printf(RED "File not sent\n" reset);
+
+		// receive the file from client
+		if (!receiveFile(arg_arr[1], connfd))
+		{
+			printf("file received from client\n");
+		}
+		else
+		{
+			printf(RED "file not received from client\n" reset);
+		}
 	}
 	else if (strcmp(arg_arr[0], "READ") == 0)
 	{

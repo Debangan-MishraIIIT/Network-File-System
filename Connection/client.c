@@ -173,6 +173,19 @@ int sendRequest(char *input, int sockfd)
 				return -2;
 			}
 		}
+
+		// send the file to ss 
+		if (!sendFile("temp.txt", connfd))
+		{
+			printf("sent the file to ss\n");
+		}
+		else
+		{
+			printf(RED "file not sent\n" reset);
+			removeFile("temp.txt");
+			return -2;
+		}
+
 		removeFile("temp.txt");
 		return 0;
 	}
