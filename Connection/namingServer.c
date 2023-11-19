@@ -315,8 +315,9 @@ void *acceptClientRequests(void *args)
                 }
                 continue;
             }
-            struct ssDetails *ss = r->orignalSS;
 
+            pthread_mutex_lock(&r->record_lock);
+            struct ssDetails *ss = r->orignalSS;
             // sending to ss
             bytesSent = send(ss->connfd, request, sizeof(request), 0);
             if (bytesSent == -1)
@@ -328,6 +329,8 @@ void *acceptClientRequests(void *args)
             char ackStatus[4096];
             bzero(ackStatus, sizeof(ackStatus));
             bytesRecv = recv(ss->connfd, ackStatus, sizeof(ackStatus), 0);
+            pthread_mutex_unlock(&r->record_lock);
+
             if (bytesRecv == -1)
             {
                 handleNetworkErrors("recv");
@@ -391,6 +394,8 @@ void *acceptClientRequests(void *args)
                 }
                 continue;
             }
+
+            pthread_mutex_lock(&r->record_lock);
             struct ssDetails *ss = r->orignalSS;
 
             // sending to ss
@@ -404,6 +409,8 @@ void *acceptClientRequests(void *args)
             char ackStatus[4096];
             bzero(ackStatus, sizeof(ackStatus));
             bytesRecv = recv(ss->connfd, ackStatus, sizeof(ackStatus), 0);
+            pthread_mutex_unlock(&r->record_lock);
+
             if (bytesRecv == -1)
             {
                 handleNetworkErrors("recv");
@@ -439,6 +446,7 @@ void *acceptClientRequests(void *args)
                 r->nextSibling = NULL;
                 r->parent = NULL;
                 r->prevSibling = NULL;
+                pthread_mutex_init(&(r->record_lock), NULL);
 
                 addToRecords(r);
             }
@@ -512,7 +520,9 @@ void *acceptClientRequests(void *args)
             bool error = false;
             char *path = arg_arr[1];
             // check if record exists
+            
             struct record *r = getRecord(path);
+            //if(strcmp(request_command, "WRITE") == 0) pthread_mutex_lock(&r->record_lock);
             struct ssDetails *ss;
             if (r == NULL)
             {
@@ -543,6 +553,7 @@ void *acceptClientRequests(void *args)
             {
                 printf(YELLOW_COLOR "Storage Server details sent to client\n" RESET_COLOR);
             }
+            //if(strcmp(request_command, "WRITE") == 0) pthread_mutex_unlock(&r->record_lock);
         }
     }
     return NULL;
@@ -602,6 +613,7 @@ void *addPaths(void *args)
         r->nextSibling = NULL;
         r->parent = NULL;
         r->prevSibling = NULL;
+        pthread_mutex_init(&(r->record_lock), NULL);
 
         addToRecords(r);
         int bytesSent = send(ss->addPathfd, "ADDED", strlen("ADDED"), 0);

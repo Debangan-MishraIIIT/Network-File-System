@@ -86,6 +86,7 @@ struct record
     struct record *nextSibling;
     struct record *parent;
     struct record *prevSibling;
+    pthread_mutex_t record_lock; 
 };
 
 struct fileDetails
