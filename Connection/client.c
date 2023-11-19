@@ -113,36 +113,369 @@ int sendRequest(char *input, int sockfd)
 			}
 		}
 	}
-	
+
+	else if (strcmp(request_command, "WRITE") == 0)
+	{
+		// request NS
+		int bytesSent = send(sockfd, input, strlen(input), 0);
+		if (bytesSent == -1)
+		{
+			handleNetworkErrors("send");
+		}
+		if (bytesSent == 0)
+		{
+			// nm has disconnected
+			return -1;
+		}
+
+		// recieve the ss details
+		struct ssDetails ss;
+		int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
+		if ((ss.id == 0) || bytesRecv == 0 || (bytesRecv == -1 && errno == ECONNRESET))
+		{
+			// nm has disconnected
+			return -1;
+		}
+		if (bytesRecv == -1)
+		{
+			handleNetworkErrors("recv");
+			return -2;
+		}
+		else if (ss.id == -1)
+		{
+			handleFileOperationError("no_path");
+			return -2;
+		}
+		else if (ss.id == -2)
+		{
+			handleFileOperationError("no_file");
+			return -2;
+		}
+
+		printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
+		int connfd = joinSS(ss);
+
+		// send same request to ss
+		char ssRequest[1000];
+		strcpy(ssRequest, input);
+		bytesSent = send(connfd, ssRequest, sizeof(ssRequest), 0);
+		if (bytesSent == -1)
+		{
+			handleNetworkErrors("recv");
+			return -2;
+		}
+		printf("\'%s\' sent to SS %s:%d\n", input, ss.ip, ss.cliPort);
+
+		// receive the perms first
+		char perms[11];
+		bytesRecv = recv(connfd, perms, sizeof(perms), 0);
+		if (bytesRecv == -1)
+		{
+			handleNetworkErrors("recv");
+			return -2;
+		}
+		if (strlen(perms) != 10)
+		{
+			handleSYSErrors(perms);
+			return -2;
+		}
+
+		printf("permissions: %s\n", perms);
+		char recvFileName[1024] = "temp.txt\0";
+		// recieve file
+		if (!receiveFile(recvFileName, connfd))
+		{
+			printf("Client: received the file from ss\n");
+		}
+		else
+		{
+			handleFileOperationError("recv_file");
+			return -2;
+		}
+
+		mode_t mode = reversePermissions(perms);
+
+		if (chmod(recvFileName, mode) == 0)
+		{
+			printf("Permissions set successfully.\n");
+		}
+		else
+		{
+			handleSYSErrors("chmod");
+			return -2;
+		}
+
+		char editor[1000];
+		while (1)
+		{
+			printf("Choose Editor that you want:\n");
+			printf("1. gedit\n");
+			printf("2. vim\n");
+			printf("3. nano\n");
+			printf("4. code\n");
+			printf("5. emacs\n");
+			printf("6. none(user's personal editor)\n");
+			scanf("%s", editor);
+			if (!strcmp(editor, "gedit") || !strcmp(editor, "vim") || !strcmp(editor, "nano") || !strcmp(editor, "code") || !strcmp(editor, "emacs") || !strcmp(editor, "none") || !strcmp(editor, "1") || !strcmp(editor, "2") || !strcmp(editor, "3") || !strcmp(editor, "4") || !strcmp(editor, "5") || !strcmp(editor, "6"))
+			{
+				break;
+			}
+			else
+			{
+				printf("Invalid Editor!");
+			}
+		}
+
+		if (!strcmp(editor, "none") || !strcmp(editor, "6"))
+		{
+			printf("File has been added to the current directory\n");
+			printf("Press ENTER after making changes locally to upload\n");
+			char s[10];
+			scanf("%s", s);
+		}
+		else
+		{
+			if (writeFile(recvFileName, editor) == -1)
+			{
+				printf("Invalid file saved in user directory\n");
+				return -2;
+			}
+		}
+
+		// send the file to ss
+		if (!sendFile(recvFileName, connfd))
+		{
+			printf("sent the file to ss\n");
+		}
+		else
+		{
+			handleFileOperationError("send_file");
+			removeFile(recvFileName);
+			return -2;
+		}
+
+		removeFile(recvFileName);
+		return 0;
+	}
+	else if (strcmp(request_command, "READ") == 0)
+	{
+		// request NS
+		int bytesSent = send(sockfd, input, strlen(input), 0);
+		if (bytesSent == -1)
+		{
+			handleNetworkErrors("send");
+		}
+		if (bytesSent == 0)
+		{
+			// nm has disconnected
+			return -1;
+		}
+
+		// recieve the ss details
+		struct ssDetails ss;
+		int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
+		if ((ss.id == 0) || bytesRecv == 0 || (bytesRecv == -1 && errno == ECONNRESET))
+		{
+			// nm has disconnected
+			return -1;
+		}
+		if (bytesRecv == -1)
+		{
+			handleNetworkErrors("recv");
+			return -2;
+		}
+		else if (ss.id == -1)
+		{
+			handleFileOperationError("no_path");
+			return -2;
+		}
+		else if (ss.id == -2)
+		{
+			handleFileOperationError("no_file");
+			return -2;
+		}
+
+		// printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
+		int connfd = joinSS(ss);
+
+		// send same request to ss
+		char ssRequest[1000];
+		strcpy(ssRequest, input);
+		bytesSent = send(connfd, ssRequest, sizeof(ssRequest), 0);
+		if (bytesSent == -1)
+		{
+			handleNetworkErrors("recv");
+			return -2;
+		}
+		// printf("\'%s\' sent to SS %s:%d\n", input, ss.ip, ss.cliPort);
+
+		// receive the perms first
+		char perms[11];
+		bytesRecv = recv(connfd, perms, sizeof(perms), 0);
+		if (bytesRecv == -1)
+		{
+			handleNetworkErrors("recv");
+			return -2;
+		}
+		if (strlen(perms) != 10)
+		{
+			handleSYSErrors(perms);
+			return -2;
+		}
+
+		// printf("permissions: %s\n", perms);
+		char recvFileName[1024];
+		strcpy(recvFileName, basename(arg_arr[1]));
+		strcpy(recvFileName + strlen(recvFileName), "_copy");
+		// recieve file
+		if (!receiveFile(recvFileName, connfd))
+		{
+			// printf("Client: received the file from ss\n");
+		}
+		else
+		{
+			handleFileOperationError("recv_file");
+			return -2;
+		}
+
+		mode_t mode = reversePermissions(perms);
+
+		if (chmod(recvFileName, mode) == 0)
+		{
+			// printf("Permissions set successfully.\n");
+		}
+		else
+		{
+			handleSYSErrors("chmod");
+			return -2;
+		}
+
+		char editor[1000];
+		char editorList[6][100] = {"gedit", "vim", "nano", "code", "emacs", "cat"};
+		printf(YELLOW_COLOR "Choose Editor to read file:\n");
+		printf("1. gedit\n");
+		printf("2. vim\n");
+		printf("3. nano\n");
+		printf("4. code\n");
+		printf("5. emacs\n");
+		printf("6. terminal\n" RESET_COLOR);
+		while (1)
+		{
+			scanf("%s", editor);
+			if (!strcmp(editor, "gedit") || !strcmp(editor, "vim") || !strcmp(editor, "nano") || !strcmp(editor, "code") || !strcmp(editor, "emacs") || !strcmp(editor, "none") || !strcmp(editor, "1") || !strcmp(editor, "2") || !strcmp(editor, "3") || !strcmp(editor, "4") || !strcmp(editor, "5") || !strcmp(editor, "6"))
+			{
+				break;
+			}
+			else
+			{
+				printf(RED_COLOR "Invalid Editor!\n" YELLOW_COLOR "Choose Editor:\n" RESET_COLOR);
+			}
+		}
+
+		if (!strcmp(editor, "terminal") || !strcmp(editor, "6"))
+		{
+			if (readFile(recvFileName, "cat") == -1)
+			{
+				handleFileOperationError("read");
+				return -2;
+			}
+			printf("\n");
+		}
+		else
+		{
+			if (strlen(editor) == 1)
+			{
+				strcpy(editor, editorList[atoi(editor) - 1]);
+			}
+			if (readFile(recvFileName, editor) == -1)
+			{
+				handleFileOperationError("read");
+				return -2;
+			}
+		}
+		removeFile(recvFileName);
+		return 0;
+	}
+	else if (strcmp(request_command, "FILEINFO") == 0)
+	{
+		// request NS
+		int bytesSent = send(sockfd, input, strlen(input), 0);
+		if (bytesSent == -1)
+		{
+			handleNetworkErrors("send");
+		}
+		if (bytesSent == 0)
+		{
+			// nm has disconnected
+			return -1;
+		}
+
+		// recieve the ss details
+		struct ssDetails ss;
+		int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
+		if ((ss.id == 0) || bytesRecv == 0 || (bytesRecv == -1 && errno == ECONNRESET))
+		{
+			// nm has disconnected
+			return -1;
+		}
+		if (bytesRecv == -1)
+		{
+			handleNetworkErrors("recv");
+			return -2;
+		}
+		else if (ss.id == -1)
+		{
+			handleFileOperationError("no_path");
+			return -2;
+		}
+		else if (ss.id == -2)
+		{
+			handleFileOperationError("no_file");
+			return -2;
+		}
+
+		int connfd = joinSS(ss);
+
+		// send same request to ss
+		char ssRequest[1000];
+		strcpy(ssRequest, input);
+		bytesSent = send(connfd, ssRequest, sizeof(ssRequest), 0);
+		if (bytesSent == -1)
+		{
+			handleNetworkErrors("recv");
+			return -2;
+		}
+
+		struct fileDetails det;
+		bzero(&det, sizeof(det));
+		bytesRecv = recv(connfd, &det, sizeof(det), 0);
+		if (bytesRecv == -1)
+		{
+			handleNetworkErrors("recv");
+			return -2;
+			// break;
+		}
+		if (strcmp(det.perms, "----------") == 0)
+		{
+			handleAllErrors(det.path);
+			return -2;
+		}
+
+		printf(CYAN_COLOR "File Name: %s\n", det.fileName);
+		printf("File path: %s\n", det.path);
+		printf("File permissions: %s\n", det.perms);
+		printf("File size: %d\n", det.size);
+		printf("File last modified time: %s", ctime(&det.lastModifiedTime));
+		printf("File last access time: %s\n" CYAN_COLOR, ctime(&det.lastAccessTime));
+		return 0;
+	}
+
 	else
 	{
 		printf(RED_COLOR "Invalid Input!\n" RESET_COLOR);
 		return 0;
 	}
 
-	// // recieve the storage server details
-	// struct ssDetails ss;
-	// int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
-	// if ((ss.id <= 0) || bytesRecv == 0 || (bytesRecv == -1 && errno == ECONNRESET))
-	// {
-	// 	// nm has disconnected
-	// 	return -1;
-	// }
-	// if (bytesRecv == -1)
-	// {
-	// 	handleNetworkErrors("recv");
-	// 	return 0;
-	// }
-
-	// printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
-
-	// int connfd = joinSS(ss);
-	// bytesSent = send(connfd, request, sizeof(request), 0);
-	// if (bytesSent == -1)
-	// {
-	// 	handleNetworkErrors("recv");
-	// }
-	// printf("\'%s\' sent to SS %s:%d\n", request, ss.ip, ss.cliPort);
 	return 0;
 }
 
@@ -236,10 +569,18 @@ int main(int argc, char *argv[])
 	while (1)
 	{
 		// char input[4096];
+		printf(BLUE_COLOR "Enter command: " RESET_COLOR);
 		char *input = malloc(sizeof(char) * 4096);
 		if (fgets(input, 4096, stdin) == NULL)
 		{
 			break;
+		}
+		while (strlen(input) == 1)
+		{
+			if (fgets(input, 4096, stdin) == NULL)
+			{
+				break;
+			}
 		}
 
 		if (input[strlen(input) - 1] == '\n')

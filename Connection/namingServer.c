@@ -18,6 +18,8 @@ LRUCache *myCache;
 
 pthread_mutex_t hostLock;
 pthread_mutex_t recordsLock;
+pthread_mutex_t loggingLock;
+
 int nmSock;
 
 struct record *getRecord(char *path)
@@ -140,6 +142,7 @@ void removeFromRecords(char *path)
 
 void logMessage(const char *message, const char *ip, int port)
 {
+    pthread_mutex_lock(&loggingLock);
     time_t now;
     struct tm *timestamp;
     char buffer[80];
@@ -150,6 +153,7 @@ void logMessage(const char *message, const char *ip, int port)
     strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S", timestamp);
 
     printf(CYAN_COLOR "[%s] [%s:%d] -> %s\n" RESET_COLOR, buffer, ip, port, message);
+    pthread_mutex_unlock(&loggingLock);
 }
 
 void *acceptClientRequests(void *args)
@@ -338,6 +342,44 @@ void *acceptClientRequests(void *args)
             }
 
             continue;
+        }
+
+        else if (strcmp(request_command, "READ") == 0 || strcmp(request_command, "WRITE") == 0 || strcmp(request_command, "FILEINFO") == 0)
+        {
+            bool error = false;
+            char *path = arg_arr[1];
+            // check if record exists
+            struct record *r = getRecord(path);
+            struct ssDetails *ss;
+            if (r == NULL)
+            {
+                ss = malloc(sizeof(struct ssDetails));
+                ss->id = -1; // invalid record
+                handleFileOperationError("no_path");
+                error = false;
+            }
+            else if (r->isDir == true)
+            {
+                ss = malloc(sizeof(struct ssDetails));
+                ss->id = -2; // invalid record
+                handleFileOperationError("no_file");
+                error = false;
+            }
+            else
+            {
+                ss = r->orignalSS;
+            }
+            // printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
+            // send ss details
+            int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
+            if (bytesSent == -1)
+            {
+                handleNetworkErrors("send");
+            }
+            if (!error)
+            {
+                printf(YELLOW_COLOR "Storage Server details sent to client\n" RESET_COLOR);
+            }
         }
     }
     return NULL;
@@ -612,7 +654,9 @@ int main(int argc, char *argv[])
     }
     int rc = pthread_mutex_init(&hostLock, NULL);
     assert(rc == 0);
-    pthread_mutex_init(&recordsLock, NULL);
+    rc = pthread_mutex_init(&recordsLock, NULL);
+    assert(rc == 0);
+    rc = pthread_mutex_init(&loggingLock, NULL);
     assert(rc == 0);
 
     pthread_t acceptHostThread;

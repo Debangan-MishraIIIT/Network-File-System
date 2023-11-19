@@ -254,17 +254,220 @@ void *serveNM_Requests(void *args)
 void *serveClient_Request(void *args)
 {
 	int connfd = *((int *)args);
-	// printf("connfd in ss: %d\n", connfd);
 
+	// recieve from client
 	char buffer[4096];
+	bzero(buffer, 4096);
 	int bytesRecv = recv(connfd, buffer, sizeof(buffer), 0);
 	if (bytesRecv == -1)
 	{
-		// perror("recv");
 		handleNetworkErrors("recv");
 	}
+	printf(CYAN_COLOR "Recieved command from client: %s\n" RESET_COLOR, buffer);
 
-	printf("Recieved from client: %s\n", buffer);
+	char *arg_arr[3];
+	parse_input(arg_arr, buffer);
+	char *request_command = arg_arr[0];
+
+	if (strcmp(arg_arr[0], "WRITE") == 0)
+	{
+		bool error = false;
+		struct stat fileStat;
+		char perms[20];
+		if (!check_path_exists(arg_arr[1]))
+		{
+			handleFileOperationError("file_not_found");
+			strcpy(perms, "no_read_perm");
+			error = true;
+		}
+		if (!error)
+		{
+			int r = stat(arg_arr[1], &fileStat);
+			if (r == -1)
+			{
+				handleSYSErrors("stat");
+				strcpy(perms, "stat"); // add error in perms
+				error = true;
+			}
+			else
+			{
+				convertPermissions(fileStat.st_mode, perms);
+			}
+
+			if (perms[1] == '-')
+			{
+				handleFileOperationError("no_read_perm");
+				strcpy(perms, "no_read_perm"); // add error in perms
+				error = true;
+			}
+			if (perms[2] == '-')
+			{
+				handleFileOperationError("no_write_perm");
+				strcpy(perms, "no_write_perm"); // add error in perms
+				error = true;
+			}
+		}
+
+		// send the perms first
+		bytesRecv = send(connfd, perms, sizeof(perms), 0);
+		if (bytesRecv == -1)
+		{
+			handleNetworkErrors("recv");
+		}
+		if (error)
+		{
+			return NULL;
+		}
+
+		// send the file to client
+		if (!sendFile(arg_arr[1], connfd))
+		{
+			printf(YELLOW_COLOR"Sent the file to client\n"RESET_COLOR);
+		}
+		else
+		{
+			// printf(RED "File not sent\n" reset);
+			handleFileOperationError("send_file");
+			return NULL;
+		}
+
+		// receive the file from client
+		if (!receiveFile(arg_arr[1], connfd))
+		{
+			printf(YELLOW_COLOR"Received the file from client\n"RESET_COLOR);
+
+		}
+		else
+		{
+			handleFileOperationError("recv_file");
+			return NULL;
+		}
+
+		// modify the mtime and actime manually since the user modified it while writing
+		// struct timespec times[2];
+		// struct stat file_stat;
+		// if (stat(arg_arr[1], &file_stat) == -1)
+		// {
+		// 	handleSYSErrors("stat");
+		// 	return NULL;
+		// }
+		// times[0].tv_sec = time(NULL);
+		// times[0].tv_nsec = file_stat.st_atim.tv_nsec;
+		// times[1].tv_sec = file_stat.st_mtime;
+		// times[1].tv_nsec = file_stat.st_mtim.tv_nsec;
+		// if (utimensat(AT_FDCWD, arg_arr[1], times, 0) == -1)
+		// {
+		// 	handleSYSErrors("utimensat");
+		// 	return NULL;
+		// }
+	}
+	else if (strcmp(arg_arr[0], "READ") == 0)
+	{
+		bool error = false;
+		struct stat fileStat;
+		char perms[20];
+		if (!check_path_exists(arg_arr[1]))
+		{
+			handleFileOperationError("file_not_found");
+			strcpy(perms, "no_read_perm");
+			error = true;
+		}
+		if (!error)
+		{
+			int r = stat(arg_arr[1], &fileStat);
+			if (r == -1)
+			{
+				handleSYSErrors("stat");
+				strcpy(perms, "stat"); // add error in perms
+				error = true;
+			}
+			else
+			{
+				convertPermissions(fileStat.st_mode, perms);
+			}
+
+			if (perms[1] == '-')
+			{
+				handleFileOperationError("no_read_perm");
+				strcpy(perms, "no_read_perm"); // add error in perms
+				error = true;
+			}
+			if (perms[2] == '-')
+			{
+				handleFileOperationError("no_write_perm");
+				strcpy(perms, "no_write_perm"); // add error in perms
+				error = true;
+			}
+		}
+
+		// send the perms first
+		bytesRecv = send(connfd, perms, sizeof(perms), 0);
+		if (bytesRecv == -1)
+		{
+			handleNetworkErrors("recv");
+		}
+		if (error)
+		{
+			return NULL;
+		}
+
+		// send the file to client
+		if (!sendFile(arg_arr[1], connfd))
+		{
+			printf(YELLOW_COLOR"Sent the file to client\n"RESET_COLOR);
+		}
+		else
+		{
+			// printf(RED "File not sent\n" reset);
+			handleFileOperationError("send_file");
+			return NULL;
+		}
+	}
+	else if (strcmp(arg_arr[0], "FILEINFO") == 0)
+	{
+		bool error = false;
+		char errMsg[100];
+		char perms[11];
+
+		if (!check_path_exists(arg_arr[1]))
+		{
+			handleFileOperationError("file_not_found");
+			strcpy(errMsg, "file_not_found");
+			error = true;
+		}
+		else
+		{
+			if (isDirectory(arg_arr[1]))
+			{
+				handleFileOperationError("not_file");
+				strcpy(errMsg, "not_file");
+				error = true;
+			}
+			else
+			{
+				struct stat dirStat;
+				int r = stat(arg_arr[1], &dirStat);
+				if (r == -1)
+				{
+					handleSYSErrors("stat");
+					strcpy(errMsg, "stat");
+					error = true;
+				}
+				if (error)
+				{
+					sendPathToNS(errMsg, "----------", 0, 0, 0, 0);
+					return NULL;
+				}
+
+				convertPermissions(dirStat.st_mode, perms);
+				size_t size = dirStat.st_size;
+				// since it is connfd, this sends the file details to client
+				sendPathToNS(arg_arr[1], perms, size, connfd, dirStat.st_mtime, dirStat.st_atime);
+			printf(YELLOW_COLOR"Sent the file details to client\n"RESET_COLOR);
+
+			}
+		}
+	}
 	return NULL;
 }
 

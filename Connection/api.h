@@ -16,6 +16,11 @@ void get_path(char request[], char path[]);
 int handle_naming_server_commands(char *command, char *inputS, int nmfd);
 void parse_input(char *array[], char *inputS);
 void file_separator(char *array[], char *inputS);
+int writeFile(char *path, char *editor);
+int readFile(char *path, char *editor);
+int sendFile(char *path, int sockfd);
+int receiveFile(char *path, int sockfd);
+mode_t reversePermissions(char *perms);
 
 int removeFile(char *path);
 int removeDirectory(char *path);

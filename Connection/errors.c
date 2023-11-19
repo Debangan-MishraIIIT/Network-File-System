@@ -53,67 +53,24 @@ void handleFileOperationError(char *error)
 
     if (!strcmp(error, "dir_exists"))
         printf(RED "ERROR 505: DIRECTORY ALREADY EXISTS (dir_exists)\n" reset);
-    
+
     if (!strcmp(error, "no_path"))
         printf(RED "ERROR 506: PATH IS INVALID OR NOT ACCESSIBLE\n" reset);
+
+    if (!strcmp(error, "no_read_perm"))
+        printf(RED "ERROR 507: FILE DOES NOT HAVE READ PERMISSION\n" reset);
+
+    if (!strcmp(error, "no_write_perm"))
+        printf(RED "ERROR 508: FILE DOES NOT HAVE WRITE PERMISSION\n" reset);
+
+    if (!strcmp(error, "recv_file"))
+        printf(RED "ERROR 509: COULD NOT RECEIVE FILE (recv_file)\n" reset);
+
+    if (!strcmp(error, "send_file"))
+        printf(RED "ERROR 510: COULD NOT SEND FILE (send_file)\n" reset);
+    
+    
 }
-
-// void handleFileOperationError(char *error)
-// {
-//     if (!strcmp(error, "make_directory"))
-//         printf(RED "ERROR 500: UNABLE TO CREATE A DIRECTORY (mkdir)\n" reset);
-
-//     if (!strcmp(error, "make_file"))
-//         printf(RED "ERROR 501: UNABLE TO CREATE A FILE (make_file)\n" reset);
-
-//     if (!strcmp(error, "opendir"))
-//         printf(RED "ERROR 502: UNABLE TO OPEN DIRECTORY (opendir)\n" reset);
-
-//     if (!strcmp(error, "recursive_directory_deletion"))
-//         printf(RED "ERROR 503: UNABLE TO DELETE DIRECTORY (recursive_directory_deletion)\n" reset);
-
-//     if (!strcmp(error, "remove"))
-//         printf(RED "ERROR 504: UNABLE TO REMOVE FILE (remove)\n" reset);
-
-//     if (!strcmp(error, "no_path"))
-//         printf(RED "ERROR 505: PATH MISSING\n" reset);
-
-//     if (!strcmp(error, "chdir"))
-//         printf(RED "ERROR 506: UNABLE TO CHANGE DIRECTORY (chdir)\n" reset);
-
-//     if (!strcmp(error, "opendir"))
-//         printf(RED "ERROR 507: UNABLE TO OPEN DIRECTORY (opendir)\n" reset);
-
-//     if (!strcmp(error, "getRecord"))
-//         printf(RED "ERROR 508: RECORD MISSING (getRecord)\n" reset);
-
-//     if (!strcmp(error, "search"))
-//         printf(RED "ERROR 509: FILE MISSING (search)\n" reset);
-
-//     if (!strcmp(error, "stat"))
-//         printf(RED "ERROR 510: UNABLE TO EXTRACT FILE DETAILS (stat)\n" reset);
-
-//     if (!strcmp(error, "no_file"))
-//         printf(RED "ERROR 511: FILE MISSING (no_file)\n" reset);
-
-//     if (!strcmp(error, "getcwd"))
-//         printf(RED "ERROR 512: UNABLE TO GET getcwd (getcwd)\n" reset);
-
-//     if (!strcmp(error, "open"))
-//         printf(RED "ERROR 513: UNABLE TO OPEN FILE (open)\n" reset);
-
-//     if (!strcmp(error, "read"))
-//         printf(RED "ERROR 514: UNABLE TO READ FILE (read)\n" reset);
-
-//     if (!strcmp(error, "write"))
-//         printf(RED "ERROR 515: UNABLE TO WRITE FILE (write)\n" reset);
-
-//     if (!strcmp(error, "remove_files_and_directory"))
-//         printf(RED "ERROR 516: UNABLE DELETE FILE (remove_files_and_directory)\n" reset);
-
-//     if (!strcmp(error, "recursive_directory_sending"))
-//         printf(RED "ERROR 517: UNABLE TO SEND DIRECTORY (recursive_directory_sending)\n" reset);
-// }
 
 // syscall and input errors (all in blue)
 void handleSYSErrors(char *error)
@@ -135,6 +92,24 @@ void handleSYSErrors(char *error)
 
     if (!strcmp(error, "creat"))
         printf(LIGHT_RED_COLOR "ERROR 605: CREATE FILE FAILED (creat)\n" reset);
+
+    if (!strcmp(error, "open"))
+        printf(LIGHT_RED_COLOR "ERROR 606: COULD NOT OPEN FILE (open)\n" reset);
+
+    if (!strcmp(error, "read"))
+        printf(LIGHT_RED_COLOR "ERROR 607: COULD NOT READ FROM FILE (read)\n" reset);
+
+    if (!strcmp(error, "write"))
+        printf(LIGHT_RED_COLOR "ERROR 608: COULD NOT WRITE TO FILE (write)\n" reset);
+
+    if (!strcmp(error, "utimensat"))
+        printf(LIGHT_RED_COLOR "ERROR 609: COULD NOT CHANGE MODIFICATION TIME (utimensat)\n" reset);
+    
+    if (!strcmp(error, "chmod"))
+        printf(LIGHT_RED_COLOR "ERROR 610: COULD NOT CHANGE PERMISSIONS (chmod)\n" reset);
+    
+    if (!strcmp(error, "execvp"))
+        printf(LIGHT_RED_COLOR "ERROR 611: COULD NOT EXECUTE COMMAND (execvp)\n" reset);
 }
 
 // network errors (all in magenta)
