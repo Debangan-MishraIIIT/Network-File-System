@@ -273,40 +273,40 @@ void *serveClient_Request(void *args)
 	{
 		bool error = false;
 		struct stat fileStat;
-		char perms[20];
+		char perms[11];
 		if (!check_path_exists(arg_arr[1]))
 		{
 			handleFileOperationError("file_not_found");
-			strcpy(perms, "no_read_perm");
+			// strcpy(perms, "no_read_perm");
 			error = true;
 		}
-		if (!error)
+		// if (!error)
+		// {
+		int r = stat(arg_arr[1], &fileStat);
+		if (r == -1)
 		{
-			int r = stat(arg_arr[1], &fileStat);
-			if (r == -1)
-			{
-				handleSYSErrors("stat");
-				strcpy(perms, "stat"); // add error in perms
-				error = true;
-			}
-			else
-			{
-				convertPermissions(fileStat.st_mode, perms);
-			}
-
-			if (perms[1] == '-')
-			{
-				handleFileOperationError("no_read_perm");
-				strcpy(perms, "no_read_perm"); // add error in perms
-				error = true;
-			}
-			if (perms[2] == '-')
-			{
-				handleFileOperationError("no_write_perm");
-				strcpy(perms, "no_write_perm"); // add error in perms
-				error = true;
-			}
+			handleSYSErrors("stat");
+			// strcpy(perms, "stat"); // add error in perms
+			error = true;
 		}
+		else
+		{
+			convertPermissions(fileStat.st_mode, perms);
+		}
+
+		if (perms[1] == '-')
+		{
+			handleFileOperationError("no_read_perm");
+			// strcpy(perms, "no_read_perm"); // add error in perms
+			error = true;
+		}
+		if (perms[2] == '-')
+		{
+			handleFileOperationError("no_write_perm");
+			// strcpy(perms, "no_write_perm"); // add error in perms
+			error = true;
+		}
+		// }
 
 		// send the perms first
 		bytesRecv = send(connfd, perms, sizeof(perms), 0);
@@ -322,7 +322,7 @@ void *serveClient_Request(void *args)
 		// send the file to client
 		if (!sendFile(arg_arr[1], connfd))
 		{
-			printf(YELLOW_COLOR"Sent the file to client\n"RESET_COLOR);
+			printf(YELLOW_COLOR "Sent the file to client\n" RESET_COLOR);
 		}
 		else
 		{
@@ -334,8 +334,7 @@ void *serveClient_Request(void *args)
 		// receive the file from client
 		if (!receiveFile(arg_arr[1], connfd))
 		{
-			printf(YELLOW_COLOR"Received the file from client\n"RESET_COLOR);
-
+			printf(YELLOW_COLOR "Received the file from client\n" RESET_COLOR);
 		}
 		else
 		{
@@ -365,40 +364,40 @@ void *serveClient_Request(void *args)
 	{
 		bool error = false;
 		struct stat fileStat;
-		char perms[20];
+		char perms[11];
 		if (!check_path_exists(arg_arr[1]))
 		{
 			handleFileOperationError("file_not_found");
-			strcpy(perms, "no_read_perm");
+			// strcpy(perms, "no_read_perm");
 			error = true;
 		}
-		if (!error)
+		// if (!error)
+		// {
+		int r = stat(arg_arr[1], &fileStat);
+		if (r == -1)
 		{
-			int r = stat(arg_arr[1], &fileStat);
-			if (r == -1)
-			{
-				handleSYSErrors("stat");
-				strcpy(perms, "stat"); // add error in perms
-				error = true;
-			}
-			else
-			{
-				convertPermissions(fileStat.st_mode, perms);
-			}
-
-			if (perms[1] == '-')
-			{
-				handleFileOperationError("no_read_perm");
-				strcpy(perms, "no_read_perm"); // add error in perms
-				error = true;
-			}
-			if (perms[2] == '-')
-			{
-				handleFileOperationError("no_write_perm");
-				strcpy(perms, "no_write_perm"); // add error in perms
-				error = true;
-			}
+			handleSYSErrors("stat");
+			// strcpy(perms, "stat"); // add error in perms
+			error = true;
 		}
+		else
+		{
+			convertPermissions(fileStat.st_mode, perms);
+		}
+
+		if (perms[1] == '-')
+		{
+			handleFileOperationError("no_read_perm");
+			// strcpy(perms, "no_read_perm"); // add error in perms
+			error = true;
+		}
+		if (perms[2] == '-')
+		{
+			handleFileOperationError("no_write_perm");
+			// strcpy(perms, "no_write_perm"); // add error in perms
+			error = true;
+		}
+		// }
 
 		// send the perms first
 		bytesRecv = send(connfd, perms, sizeof(perms), 0);
@@ -414,7 +413,7 @@ void *serveClient_Request(void *args)
 		// send the file to client
 		if (!sendFile(arg_arr[1], connfd))
 		{
-			printf(YELLOW_COLOR"Sent the file to client\n"RESET_COLOR);
+			printf(YELLOW_COLOR "Sent the file to client\n" RESET_COLOR);
 		}
 		else
 		{
@@ -463,8 +462,7 @@ void *serveClient_Request(void *args)
 				size_t size = dirStat.st_size;
 				// since it is connfd, this sends the file details to client
 				sendPathToNS(arg_arr[1], perms, size, connfd, dirStat.st_mtime, dirStat.st_atime);
-			printf(YELLOW_COLOR"Sent the file details to client\n"RESET_COLOR);
-
+				printf(YELLOW_COLOR "Sent the file details to client\n" RESET_COLOR);
 			}
 		}
 	}

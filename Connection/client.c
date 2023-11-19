@@ -322,6 +322,8 @@ int sendRequest(char *input, int sockfd)
 			handleSYSErrors(perms);
 			return -2;
 		}
+		// disabling write permissions while reading
+		perms[2] = '-';
 
 		// printf("permissions: %s\n", perms);
 		char recvFileName[1024];
