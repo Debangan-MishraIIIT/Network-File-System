@@ -165,7 +165,7 @@ int sendRequest(char *input, int sockfd)
 			return -2;
 		}
 
-		printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
+		// printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
 		int connfd = joinSS(ss);
 
 		// send same request to ss
@@ -177,7 +177,7 @@ int sendRequest(char *input, int sockfd)
 			handleNetworkErrors("recv");
 			return -2;
 		}
-		printf("\'%s\' sent to SS %s:%d\n", input, ss.ip, ss.cliPort);
+		// printf("\'%s\' sent to SS %s:%d\n", input, ss.ip, ss.cliPort);
 
 		// receive the perms first
 		char perms[11];
@@ -198,7 +198,7 @@ int sendRequest(char *input, int sockfd)
 		// recieve file
 		if (!receiveFile(recvFileName, connfd))
 		{
-			printf("Client: received the file from ss\n");
+			// printf("Client: received the file from ss\n");
 		}
 		else
 		{
@@ -210,7 +210,7 @@ int sendRequest(char *input, int sockfd)
 
 		if (chmod(recvFileName, mode) == 0)
 		{
-			printf("Permissions set successfully.\n");
+			// printf("Permissions set successfully.\n");
 		}
 		else
 		{
@@ -219,17 +219,18 @@ int sendRequest(char *input, int sockfd)
 		}
 
 		char editor[1000];
+		char editorList[4][100] = {"gedit", "vim", "nano", "emacs"};
 		while (1)
 		{
-			printf("Choose Editor that you want:\n");
+			printf("Choose Editor to edit file:\n");
 			printf("1. gedit\n");
 			printf("2. vim\n");
 			printf("3. nano\n");
-			printf("4. code\n");
-			printf("5. emacs\n");
-			printf("6. none(user's personal editor)\n");
+			// printf("4. code\n");
+			printf("4. emacs\n");
+			printf("5. none (edit locally)\n");
 			scanf("%s", editor);
-			if (!strcmp(editor, "gedit") || !strcmp(editor, "vim") || !strcmp(editor, "nano") || !strcmp(editor, "code") || !strcmp(editor, "emacs") || !strcmp(editor, "none") || !strcmp(editor, "1") || !strcmp(editor, "2") || !strcmp(editor, "3") || !strcmp(editor, "4") || !strcmp(editor, "5") || !strcmp(editor, "6"))
+			if (!strcmp(editor, "gedit") || !strcmp(editor, "vim") || !strcmp(editor, "nano") || !strcmp(editor, "emacs") || !strcmp(editor, "none") || !strcmp(editor, "1") || !strcmp(editor, "2") || !strcmp(editor, "3") || !strcmp(editor, "4") || !strcmp(editor, "5") )
 			{
 				break;
 			}
@@ -239,18 +240,22 @@ int sendRequest(char *input, int sockfd)
 			}
 		}
 
-		if (!strcmp(editor, "none") || !strcmp(editor, "6"))
+		if (!strcmp(editor, "none") || !strcmp(editor, "5"))
 		{
 			printf("File has been added to the current directory\n");
 			printf("Press ENTER after making changes locally to upload\n");
-			char s[10];
-			scanf("%s", s);
+			char c;
+			scanf("%c", &c);
 		}
 		else
 		{
+			if (strlen(editor) == 1)
+			{
+				strcpy(editor, editorList[atoi(editor) - 1]);
+			}
 			if (writeFile(recvFileName, editor) == -1)
 			{
-				printf("Invalid file saved in user directory\n");
+				handleSYSErrors("write");
 				return -2;
 			}
 		}
@@ -258,7 +263,7 @@ int sendRequest(char *input, int sockfd)
 		// send the file to ss
 		if (!sendFile(recvFileName, connfd))
 		{
-			printf("sent the file to ss\n");
+			printf(YELLOW_COLOR"Sent the file to Storage Server\n"reset);
 		}
 		else
 		{
@@ -366,18 +371,17 @@ int sendRequest(char *input, int sockfd)
 		}
 
 		char editor[1000];
-		char editorList[6][100] = {"gedit", "vim", "nano", "code", "emacs", "cat"};
-		printf(YELLOW_COLOR "Choose Editor to read file:\n");
+		char editorList[5][100] = {"gedit", "vim", "nano", "emacs", "cat"};
+		printf(YELLOW_COLOR "Choose Editor to Read file:\n");
 		printf("1. gedit\n");
 		printf("2. vim\n");
 		printf("3. nano\n");
-		printf("4. code\n");
-		printf("5. emacs\n");
-		printf("6. terminal\n" RESET_COLOR);
+		printf("4. emacs\n");
+		printf("5. terminal\n" RESET_COLOR);
 		while (1)
 		{
 			scanf("%s", editor);
-			if (!strcmp(editor, "gedit") || !strcmp(editor, "vim") || !strcmp(editor, "nano") || !strcmp(editor, "code") || !strcmp(editor, "emacs") || !strcmp(editor, "none") || !strcmp(editor, "1") || !strcmp(editor, "2") || !strcmp(editor, "3") || !strcmp(editor, "4") || !strcmp(editor, "5") || !strcmp(editor, "6"))
+			if (!strcmp(editor, "gedit") || !strcmp(editor, "vim") || !strcmp(editor, "nano") || !strcmp(editor, "emacs") || !strcmp(editor, "none") || !strcmp(editor, "1") || !strcmp(editor, "2") || !strcmp(editor, "3") || !strcmp(editor, "4") || !strcmp(editor, "5"))
 			{
 				break;
 			}
@@ -484,6 +488,7 @@ int sendRequest(char *input, int sockfd)
 		printf("File last access time: %s\n" CYAN_COLOR, ctime(&det.lastAccessTime));
 		return 0;
 	}
+
 	else
 	{
 		printf(RED_COLOR "Invalid Input!\n" RESET_COLOR);
