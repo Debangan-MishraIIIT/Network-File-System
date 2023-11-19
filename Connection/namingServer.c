@@ -41,6 +41,76 @@ struct record *getRecord(char *path)
         return NULL;
 }
 
+void removePrefix(char *str, const char *prefix)
+{
+    size_t prefixLen = strlen(prefix);
+    size_t strLen = strlen(str);
+
+    if (strLen >= prefixLen && strncmp(str, prefix, prefixLen) == 0)
+    {
+        memmove(str, str + prefixLen, strLen - prefixLen + 1); // +1 to include the null terminator
+        if (str[0] == '/')
+        {
+            memmove(str, str + 1, strLen - prefixLen); // Remove the leading '/'
+        }
+    }
+}
+
+char *concatenateStrings(const char *A, const char *B, const char *C, const char *D)
+{
+    size_t totalLength = strlen(A) + 1 + strlen(B) + 1 + strlen(C) + 1 + strlen(D) + 1;
+    char *result = (char *)malloc(totalLength);
+    if (result == NULL)
+    {
+        perror("Memory allocation failed"); // error
+    }
+
+    strcpy(result, A);
+    strcat(result, " ");
+    strcat(result, B);
+    strcat(result, "/");
+    strcat(result, C);
+    strcat(result, " ");
+    strcat(result, D);
+
+    return result;
+}
+
+int copyLocally(struct record *curr_rec, char *mdir, char *base_dir, struct ssDetails *ss)
+{
+    if (curr_rec == NULL)
+    {
+        return 0;
+    }
+    char *dup = strdup(curr_rec->path);
+    int res1 = 0, res3=0;
+
+    if (curr_rec->isDir)
+    {
+        removePrefix(dup, mdir);
+        char *new_request = concatenateStrings("MKDIR", base_dir, dup, curr_rec->originalPerms);
+        printf("%s\n", new_request);
+        res3 = send(ss->connfd, new_request, sizeof(new_request), 0);
+        res1 = copyLocally(curr_rec->firstChild, mdir, base_dir, ss);
+    }
+    else
+    {
+        removePrefix(dup, mdir);
+        char *new_request = concatenateStrings("MKFILE", base_dir, dup, curr_rec->originalPerms);
+        printf("%s\n", new_request);
+        res3 = send(ss->connfd, new_request, sizeof(new_request), 0);
+    }
+    int res2 = copyLocally(curr_rec->nextSibling, mdir, base_dir, ss);
+    if (res1 == 0 && res2 == 0 && res3>0)
+    {
+        return 0;
+    }
+    else
+    {
+        return -1; // error
+    }
+}
+
 void addToRecords(struct record *r)
 {
     if (root == NULL)
@@ -213,6 +283,7 @@ void *acceptClientRequests(void *args)
         else if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0)
         {
             char *arg_copy = strdup(arg_arr[1]);
+            char *perms;
 
             // file or dir already exists
             if (getRecord(arg_copy) != NULL)
@@ -314,6 +385,53 @@ void *acceptClientRequests(void *args)
             }
 
             continue;
+        }
+
+        else if (strcmp(request_command, "COPYDIR") == 0)
+        {
+            struct record *r1 = getRecord(arg_arr[1]);
+            struct record *r2 = getRecord(arg_arr[2]);
+            if (r1 == NULL || r2 == NULL)
+            {
+                // sending ack status to client
+                handleFileOperationError("no_path");
+                bytesSent = send(cli->connfd, "no_path", sizeof("no_path"), 0);
+                if (bytesSent == -1)
+                {
+                    handleNetworkErrors("send");
+                }
+                continue;
+            }
+
+            char *mdir = dirname(strdup(r1->path));
+            // struct ssDetails *ss = r2->orignalSS;
+            // // sending to ss
+            // bytesSent = send(ss->connfd, request, sizeof(request), 0);
+            // if (bytesSent == -1)
+            // {
+            //     handleNetworkErrors("send");
+            // }
+
+            int resp = copyLocally(r1, mdir, r2->path, r2->orignalSS); // error
+
+            char ackStatus[4096];
+            if (resp == 0)
+            {
+                strcpy(ackStatus, "SUCCESS");
+            }
+            else
+            {
+                strcpy(ackStatus, "ERROR");
+            }
+            printf("%s\n", ackStatus);
+
+            bytesSent = send(cli->connfd, ackStatus, sizeof(ackStatus), 0);
+            if (bytesSent == -1)
+            {
+                handleNetworkErrors("send");
+            }
+            continue;
+            // int resp= sendDir
         }
 
         else if (strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)

@@ -33,7 +33,8 @@ int sendRequest(char *input, int sockfd)
 	char *request_command = arg_arr[0];
 
 	// privileged
-	if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0)
+	if (strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0 ||
+		strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0)
 	{
 		int bytesSent = send(sockfd, input, strlen(input), 0);
 		if (bytesSent == -1)
@@ -109,6 +110,19 @@ int sendRequest(char *input, int sockfd)
 			{
 				handleAllErrors(ackMsg);
 				printf(RED_COLOR "File %s could not be removed\n" RESET_COLOR, arg_arr[1]);
+				return -2;
+			}
+		}else if (strcmp(request_command, "COPYDIR") == 0)
+		{
+			if (strcmp(ackMsg, "SUCCESS") == 0)
+			{
+				printf(GREEN_COLOR "Directory %s successfully copied\n" RESET_COLOR, arg_arr[1]);
+				return 0;
+			}
+			else
+			{
+				handleAllErrors(ackMsg);
+				printf(RED_COLOR "Directory %s could not be copied\n" RESET_COLOR, arg_arr[1]);
 				return -2;
 			}
 		}

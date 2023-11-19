@@ -1,21 +1,6 @@
 #include "headers.h"
 // there should be an inifinite thread in the NS side that also checks and updates the paths
 
-void convertPermissions(mode_t st_mode, char *perms)
-{
-	perms[0] = (S_ISDIR(st_mode)) ? 'd' : '-';
-	perms[1] = (st_mode & S_IRUSR) ? 'r' : '-';
-	perms[2] = (st_mode & S_IWUSR) ? 'w' : '-';
-	perms[3] = (st_mode & S_IXUSR) ? 'x' : '-';
-	perms[4] = (st_mode & S_IRGRP) ? 'r' : '-';
-	perms[5] = (st_mode & S_IWGRP) ? 'w' : '-';
-	perms[6] = (st_mode & S_IXGRP) ? 'x' : '-';
-	perms[7] = (st_mode & S_IROTH) ? 'r' : '-';
-	perms[8] = (st_mode & S_IWOTH) ? 'w' : '-';
-	perms[9] = (st_mode & S_IXOTH) ? 'x' : '-';
-	perms[10] = '\0'; // Null-terminate the string
-}
-
 void sendPathToNS(char *path, char perms[11], size_t size, int nmSock)
 {
 	struct fileDetails *det = (struct fileDetails *)malloc(sizeof(struct fileDetails));
@@ -106,6 +91,8 @@ void *serveNM_Requests(void *args)
 	while (1)
 	{
 		char buffer[4096];
+		bzero(buffer, sizeof(buffer));
+		
 		int bytesRecv = recv(nmfd, buffer, sizeof(buffer), 0);
 		if (bytesRecv == -1)
 		{
@@ -155,10 +142,21 @@ void *serveNM_Requests(void *args)
 				break;
 			}
 		}
-		else if(strcmp(request_command, "MKDIR") == 0)
+		else if (strcmp(request_command, "RMFILE") == 0)
+		{
+			char *base_path = strtok(NULL, " \t\n");
+		}
+		else if (strcmp(request_command, "MKDIR") == 0)
 		{
 			// RMFILE path
-			status = makeDirectory(path);
+			char *perms = strtok(NULL, " \t\n");
+			if (perms == NULL)
+			{
+				perms= malloc(sizeof(char)*1024);
+				strcpy(perms, "drwxr-xr-x");
+			}
+
+			status = makeDirectory(path, perms);
 			switch (status)
 			{
 			case 0:
@@ -182,7 +180,7 @@ void *serveNM_Requests(void *args)
 				break;
 			}
 		}
-		else if(strcmp(request_command, "RMDIR") == 0)
+		else if (strcmp(request_command, "RMDIR") == 0)
 		{
 			// RMFILE path
 			status = removeDirectory(path);
@@ -208,10 +206,17 @@ void *serveNM_Requests(void *args)
 				break;
 			}
 		}
-		else if(strcmp(request_command, "MKFILE") == 0)
+		else if (strcmp(request_command, "MKFILE") == 0)
 		{
 			// RMFILE path
-			status = makeFile(path);
+			char *perms = strtok(NULL, " \t\n");
+			if (perms == NULL)
+			{
+				perms= malloc(sizeof(char)*1024);
+				strcpy(perms, "-rw-r--r--");
+			}
+
+			status = makeFile(path, perms);
 			switch (status)
 			{
 			case 0:

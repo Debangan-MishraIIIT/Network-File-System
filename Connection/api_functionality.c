@@ -425,6 +425,10 @@ int handle_naming_server_commands(char *command, char *inputS, int nmfd)
 
 void parse_input(char *array[], char *inputS)
 {
+    for (int i = 0; i < 3; i++)
+    {
+        array[i] = NULL;
+    }
     char *inputString = strdup(inputS);
     char *token = strtok(inputString, " \t\n");
     int count = 0;
@@ -452,7 +456,7 @@ void file_separator(char *array[], char *inputS)
 
     while (token != NULL)
     {
-        if (count == 3)
+        if (count >= 3)
         {
             handle_errors("invalid input");
             break;
@@ -462,6 +466,60 @@ void file_separator(char *array[], char *inputS)
         count++;
         token = strtok(NULL, " ");
     }
+}
+
+mode_t reversePermissions(char *perms)
+{
+    mode_t mode = 0;
+
+    // Check if the file is a directory
+    mode |= (perms[0] == 'd') ? S_IFDIR : 0;
+
+    // Owner permissions
+    mode |= (perms[1] == 'r') ? S_IRUSR : 0;
+    mode |= (perms[2] == 'w') ? S_IWUSR : 0;
+    mode |= (perms[3] == 'x') ? S_IXUSR : 0;
+
+    // Group permissions
+    mode |= (perms[4] == 'r') ? S_IRGRP : 0;
+    mode |= (perms[5] == 'w') ? S_IWGRP : 0;
+    mode |= (perms[6] == 'x') ? S_IXGRP : 0;
+
+    // Others permissions
+    mode |= (perms[7] == 'r') ? S_IROTH : 0;
+    mode |= (perms[8] == 'w') ? S_IWOTH : 0;
+    mode |= (perms[9] == 'x') ? S_IXOTH : 0;
+
+    return mode;
+}
+
+// void convertPermissions(mode_t st_mode, char *perms)
+// {
+//     perms[0] = (S_ISDIR(st_mode)) ? 'd' : '-';
+//     perms[1] = (st_mode & S_IRUSR) ? 'r' : '-';
+//     perms[2] = (st_mode & S_IWUSR) ? 'w' : '-';
+//     perms[3] = (st_mode & S_IXUSR) ? 'x' : '-';
+//     perms[4] = (st_mode & S_IRGRP) ? 'r' : '-';
+//     perms[5] = (st_mode & S_IWGRP) ? 'w' : '-';
+//     perms[6] = (st_mode & S_IXGRP) ? 'x' : '-';
+//     perms[7] = (st_mode & S_IROTH) ? 'r' : '-';
+//     perms[8] = (st_mode & S_IWOTH) ? 'w' : '-';
+//     perms[9] = (st_mode & S_IXOTH) ? 'x' : '-';
+//     perms[10] = '\0'; // Null-terminate the string
+// }
+
+void convertPermissions(mode_t mode, char* str) {
+    str[0] = S_ISDIR(mode) ? 'd' : '-';
+    str[1] = (mode & S_IRUSR) ? 'r' : '-';
+    str[2] = (mode & S_IWUSR) ? 'w' : '-';
+    str[3] = (mode & S_IXUSR) ? 'x' : '-';
+    str[4] = (mode & S_IRGRP) ? 'r' : '-';
+    str[5] = (mode & S_IWGRP) ? 'w' : '-';
+    str[6] = (mode & S_IXGRP) ? 'x' : '-';
+    str[7] = (mode & S_IROTH) ? 'r' : '-';
+    str[8] = (mode & S_IWOTH) ? 'w' : '-';
+    str[9] = (mode & S_IXOTH) ? 'x' : '-';
+    str[10] = '\0';
 }
 
 int removeFile(char *path)
@@ -512,8 +570,9 @@ int removeDirectory(char *path)
     return 0;
 }
 
-int makeDirectory(char *path)
+int makeDirectory(char *path, char *perms)
 {
+    mode_t mode = reversePermissions(perms);
     char *baseDir = dirname(strdup(path));
     int retval = 0;
     if (check_path_exists(path))
@@ -534,7 +593,7 @@ int makeDirectory(char *path)
             }
             else
             {
-                int ret = mkdir(path, 0755);
+                int ret = mkdir(path, mode);
                 if (ret == -1)
                 {
                     retval = -3; // mkdir syscall
@@ -545,8 +604,9 @@ int makeDirectory(char *path)
     return retval;
 }
 
-int makeFile(char *path)
+int makeFile(char *path, char *perms)
 {
+    mode_t mode = reversePermissions(perms);
     char *baseDir = dirname(strdup(path));
     int retval = 0;
     if (check_path_exists(path))
@@ -567,7 +627,7 @@ int makeFile(char *path)
             }
             else
             {
-                int ret = creat(path, 0644);
+                int ret = creat(path, mode);
                 if (ret == -1)
                 {
                     retval = -1; // creat syscall

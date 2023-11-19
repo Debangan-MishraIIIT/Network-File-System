@@ -17,9 +17,11 @@ int handle_naming_server_commands(char *command, char *inputS, int nmfd);
 void parse_input(char *array[], char *inputS);
 void file_separator(char *array[], char *inputS);
 
+mode_t reversePermissions(char *perms);
+void convertPermissions(mode_t mode, char *str);
 int removeFile(char *path);
 int removeDirectory(char *path);
-int makeDirectory(char *path);
-int makeFile(char *path);
+int makeDirectory(char *path, char* perms);
+int makeFile(char *path, char* perms);
 
 #endif
