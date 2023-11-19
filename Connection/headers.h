@@ -20,6 +20,8 @@
 #include <errno.h>
 #include <sys/wait.h>
 #include <libgen.h>
+#include <utime.h>
+#include <sys/time.h>
 
 #include "socket.h"
 #include "api.h"

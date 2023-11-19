@@ -184,6 +184,21 @@ void *serveClient_Request(void *args)
 		{
 			printf(RED "file not received from client\n" reset);
 		}
+		// modify the mtime and actime manually since the user modified it while writing
+		struct timespec times[2];
+		struct stat file_stat;
+		if (stat(arg_arr[1], &file_stat) == -1)
+		{
+			perror("stat");
+		}
+		times[0].tv_sec = time(NULL);
+		times[0].tv_nsec = file_stat.st_atim.tv_nsec;
+		times[1].tv_sec = file_stat.st_mtime;
+		times[1].tv_nsec = file_stat.st_mtim.tv_nsec;
+		if (utimensat(AT_FDCWD, arg_arr[1], times, 0) == -1)
+		{
+			perror("utimensat");
+		}
 	}
 	else if (strcmp(arg_arr[0], "READ") == 0)
 	{
