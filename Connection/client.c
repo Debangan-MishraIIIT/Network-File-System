@@ -113,6 +113,7 @@ int sendRequest(char *input, int sockfd)
 			}
 		}
 	}
+	
 	else
 	{
 		printf(RED_COLOR "Invalid Input!\n" RESET_COLOR);

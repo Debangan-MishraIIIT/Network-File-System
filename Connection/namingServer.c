@@ -22,29 +22,38 @@ int nmSock;
 
 struct record *getRecord(char *path)
 {
+    pthread_mutex_lock(&recordsLock);
     struct record *tableEntry;
     // first check if path exists in cache or not
     tableEntry = searchFileInCache(myCache, path);
     // printCache(myCache);
     if (tableEntry && validSS[tableEntry->orignalSS->id])
+    {
+        pthread_mutex_unlock(&recordsLock);
         return tableEntry;
+    }
 
     tableEntry = search(trieRoot, path);
     if (tableEntry && validSS[tableEntry->orignalSS->id])
     {
         // add the record to cache since it was not present before
         addFile(myCache, tableEntry);
-        // printf("Record added to cache!\n");
+        pthread_mutex_unlock(&recordsLock);
         return tableEntry;
     }
     else
+    {
+        pthread_mutex_unlock(&recordsLock);
         return NULL;
+    }
 }
 
 void addToRecords(struct record *r)
 {
+    pthread_mutex_lock(&recordsLock);
     if (root == NULL)
     {
+        pthread_mutex_unlock(&recordsLock);
         return;
     }
 
@@ -96,6 +105,8 @@ void addToRecords(struct record *r)
     }
     insertRecordToTrie(trieRoot, r);
     printf(BLUE_COLOR "Added %s as accessible path in Storage Server %d\nPermissions: %s\n" RESET_COLOR, r->path, r->orignalSS->id, r->originalPerms);
+
+    pthread_mutex_unlock(&recordsLock);
     return;
 }
 
@@ -125,6 +136,20 @@ void removeFromRecords(char *path)
     free(r->path);
     free(r);
     pthread_mutex_unlock(&recordsLock);
+}
+
+void logMessage(const char *message, const char *ip, int port)
+{
+    time_t now;
+    struct tm *timestamp;
+    char buffer[80];
+
+    time(&now);
+    timestamp = localtime(&now);
+
+    strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S", timestamp);
+
+    printf(CYAN_COLOR "[%s] [%s:%d] -> %s\n" RESET_COLOR, buffer, ip, port, message);
 }
 
 void *acceptClientRequests(void *args)
@@ -198,6 +223,7 @@ void *acceptClientRequests(void *args)
             }
             else
             {
+                handleAllErrors(ackStatus);
                 printf(YELLOW_COLOR "Command failed\n" RESET_COLOR);
             }
             // sending ack status to client
@@ -291,8 +317,6 @@ void *acceptClientRequests(void *args)
                 r->backupSS1 = NULL;
                 r->backupSS2 = NULL;
                 r->size = 0;
-                r->creationTime = time(NULL);
-                r->lastModifiedTime = time(NULL);
 
                 r->firstChild = NULL;
                 r->nextSibling = NULL;
@@ -315,32 +339,6 @@ void *acceptClientRequests(void *args)
 
             continue;
         }
-
-        else if (strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPYDIR") == 0 || strcmp(request_command, "COPYFILE") == 0)
-        {
-            // ack
-            // char buffer[1000];
-            // int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
-
-            // if (bytesRecv == -1)
-            // {
-            // 	handle_errors("recv");
-            // }
-            // printf("Recieved from NM\n%s\n\n", buffer);
-        }
-        // struct ssDetails *ss = getRecord(path)->orignalSS;
-
-        // printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
-        // sendRequestToSS(ss, request);
-
-        // // send storage server details
-        // int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
-        // if (bytesSent == -1)
-        // {
-        //     handleNetworkErrors("send");
-        // }
-
-        printf("sent ss detials to client\n");
     }
     return NULL;
 }
@@ -367,16 +365,19 @@ void *addPaths(void *args)
             printf(RED_COLOR "[-] Storage Server %d has disconnected!\n" RESET_COLOR, ss->id);
             break;
         }
-        pthread_mutex_lock(&recordsLock);
+        char logMsg[100] = "Recieved: Path - ";
+        strcpy(logMsg + strlen(logMsg), det.path);
+        logMessage(logMsg, ss->ip, ss->nmPort);
 
         if (getRecord(det.path) != NULL)
         {
-            int bytesSent = send(ss->addPathfd, "REPEAT", strlen("REPEAT"), 0);
+            int bytesSent = send(ss->addPathfd, "EXISTS", strlen("EXISTS"), 0);
             if (bytesSent == -1)
             {
                 handleNetworkErrors("send");
             }
-            pthread_mutex_unlock(&recordsLock);
+            logMessage("Sent: EXISTS", ss->ip, ss->nmPort);
+
             continue;
         }
 
@@ -391,8 +392,6 @@ void *addPaths(void *args)
         r->backupSS1 = NULL;
         r->backupSS2 = NULL;
         r->size = det.size;
-        r->creationTime = time(NULL);
-        r->lastModifiedTime = time(NULL);
 
         r->firstChild = NULL;
         r->nextSibling = NULL;
@@ -405,13 +404,13 @@ void *addPaths(void *args)
         {
             handleNetworkErrors("send");
         }
-        pthread_mutex_unlock(&recordsLock);
+        logMessage("Sent: ADDED", ss->ip, ss->nmPort);
     }
 
     return NULL;
 }
 
-void addClient(int connfd)
+void addClient(int connfd, char *hostIP, int hostPort)
 {
     while (validCli[clientCount + 1])
     {
@@ -419,6 +418,8 @@ void addClient(int connfd)
         clientCount %= 10000;
     }
     clientDetails[clientCount].connfd = connfd;
+    strcpy(clientDetails[clientCount].ip, hostIP);
+    clientDetails[clientCount].port = hostPort;
     clientDetails[clientCount].id = clientCount + 1;
     validCli[clientCount + 1] = true;
 
@@ -427,14 +428,9 @@ void addClient(int connfd)
     pthread_create(&clientThreads[clientCount], NULL, acceptClientRequests, &clientDetails[clientCount]);
 }
 
-void addStorageServer(int connfd)
+void addStorageServer(int connfd, char *hostIP, int hostPort)
 {
-    while (validSS[storageServerCount + 1])
-    {
-        storageServerCount++;
-        storageServerCount %= 10000;
-    }
-
+    storageServerCount++;
     bzero(&storageServers[storageServerCount], sizeof(storageServers[storageServerCount]));
     int bytesRecv = recv(connfd, &storageServers[storageServerCount], sizeof(storageServers[storageServerCount]), 0);
     if (bytesRecv == -1)
@@ -444,8 +440,9 @@ void addStorageServer(int connfd)
         return;
     }
     storageServers[storageServerCount].connfd = connfd;
-    storageServers[storageServerCount].id = storageServerCount + 1;
-    validSS[storageServerCount + 1] = true;
+    storageServers[storageServerCount].id = storageServerCount;
+    validSS[storageServerCount] = true;
+    logMessage("Recieved Storage Server Details", hostIP, hostPort);
 
     // create a new sockfd for adding paths dynamically
     struct sockaddr_in cli;
@@ -455,15 +452,41 @@ void addStorageServer(int connfd)
     {
         // perror("accept");
         handleNetworkErrors("accept");
-        exit(EXIT_FAILURE);
+        exit(0);
     }
 
     storageServers[storageServerCount].addPathfd = connfd;
 
-    printf(YELLOW_COLOR "[+] Storage Server %d Joined from %s:%d\n    Port for Client Communication: %d\n" RESET_COLOR, storageServers[storageServerCount].id, storageServers[storageServerCount].ip, storageServers[storageServerCount].nmPort, storageServers[storageServerCount].cliPort);
+    // check for reconnection
+    bool reconnect = false;
+    int i = 0;
+    for (i = 1; i < storageServerCount; i++)
+    {
+        if (validSS[storageServers[i].id] == false && strcmp(storageServers[i].ip, storageServers[storageServerCount].ip) == 0 && storageServers[i].nmPort == storageServers[storageServerCount].nmPort)
+        {
+            validSS[storageServers[i].id] = true;
+            reconnect = true;
+            storageServers[i].addPathfd = storageServers[storageServerCount].addPathfd;
+            storageServers[i].connfd = storageServers[storageServerCount].connfd;
+            break;
+        }
+    }
+
+    if (reconnect)
+    {
+        validSS[storageServerCount] = true;
+        printf(YELLOW_COLOR "[+] Storage Server %d Reconnected from %s:%d\n    Port for Client Communication: %d\n" RESET_COLOR, storageServers[i].id, storageServers[i].ip, storageServers[i].nmPort, storageServers[i].cliPort);
+        storageServerCount--;
+    }
+    else
+    {
+        i = storageServerCount;
+
+        printf(YELLOW_COLOR "[+] Storage Server %d Joined from %s:%d\n    Port for Client Communication: %d\n" RESET_COLOR, storageServers[storageServerCount].id, storageServers[storageServerCount].ip, storageServers[storageServerCount].nmPort, storageServers[storageServerCount].cliPort);
+    }
 
     pthread_t addpathThread;
-    pthread_create(&addpathThread, NULL, addPaths, (void *)&storageServers[storageServerCount]);
+    pthread_create(&addpathThread, NULL, addPaths, (void *)&storageServers[i]);
 }
 
 void *acceptHost(void *args)
@@ -487,6 +510,11 @@ void *acceptHost(void *args)
             handleNetworkErrors("accept");
             exit(0);
         }
+        // log
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(cli.sin_addr), ip, INET_ADDRSTRLEN);
+        logMessage("Recieved accept request", ip, ntohs(cli.sin_port));
+
         char buffer[4096];
         bzero(buffer, sizeof(buffer));
         int bytesRecv = recv(connfd, buffer, sizeof(buffer), 0);
@@ -495,6 +523,10 @@ void *acceptHost(void *args)
             handleNetworkErrors("recv");
             // perror("recv");
         }
+        char logMsg[100];
+        strcpy(logMsg, "Recieved: ");
+        strcpy(logMsg + strlen(logMsg), buffer);
+        logMessage(logMsg, ip, ntohs(cli.sin_port));
 
         char joinAcceptedMsg[100] = "ACCEPTED JOIN";
         int bytesSent = send(connfd, joinAcceptedMsg, sizeof(joinAcceptedMsg), 0);
@@ -503,17 +535,18 @@ void *acceptHost(void *args)
             handleNetworkErrors("send");
             // perror("send");
         }
+        logMessage("Sent: ACCEPTED JOIN", ip, ntohs(cli.sin_port));
 
         if (strcmp(buffer, "JOIN_AS Storage Server") == 0)
         {
             pthread_mutex_lock(&hostLock);
-            addStorageServer(connfd);
+            addStorageServer(connfd, ip, ntohs(cli.sin_port));
             pthread_mutex_unlock(&hostLock);
         }
         if (strcmp(buffer, "JOIN_AS Client") == 0)
         {
             pthread_mutex_lock(&hostLock);
-            addClient(connfd);
+            addClient(connfd, ip, ntohs(cli.sin_port));
             pthread_mutex_unlock(&hostLock);
         }
     }

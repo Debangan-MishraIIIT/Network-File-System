@@ -1,6 +1,6 @@
 #include "headers.h"
 // there should be an inifinite thread in the NS side that also checks and updates the paths
-
+int nmSock1;
 void convertPermissions(mode_t st_mode, char *perms)
 {
 	perms[0] = (S_ISDIR(st_mode)) ? 'd' : '-';
@@ -16,13 +16,16 @@ void convertPermissions(mode_t st_mode, char *perms)
 	perms[10] = '\0'; // Null-terminate the string
 }
 
-void sendPathToNS(char *path, char perms[11], size_t size, int nmSock)
+void sendPathToNS(char *path, char perms[11], size_t size, int nmSock, time_t lastModifiedTime, time_t lastAccessTime)
 {
 	struct fileDetails *det = (struct fileDetails *)malloc(sizeof(struct fileDetails));
 	strcpy(det->path, path);
 	strcpy(det->perms, perms);
 	det->size = size;
 	det->isDir = perms[0] == '-' ? false : true;
+	det->lastAccessTime = lastAccessTime;
+	det->lastModifiedTime = lastModifiedTime;
+	strcpy(det->fileName, basename(path));
 
 	int bytesSent = send(nmSock, det, sizeof(struct fileDetails), 0);
 	if (bytesSent == -1)
@@ -83,7 +86,7 @@ void *takeInputsDynamically(void *args)
 				char perms[11];
 				convertPermissions(dirStat.st_mode, perms);
 				size_t size = dirStat.st_size;
-				sendPathToNS(currPath, perms, size, nmSock);
+				sendPathToNS(currPath, perms, size, nmSock, dirStat.st_mtime, dirStat.st_atime);
 
 				token = strtok(NULL, "/");
 			}
@@ -106,6 +109,7 @@ void *serveNM_Requests(void *args)
 	while (1)
 	{
 		char buffer[4096];
+		bzero(buffer, 4096);
 		int bytesRecv = recv(nmfd, buffer, sizeof(buffer), 0);
 		if (bytesRecv == -1)
 		{
@@ -155,7 +159,7 @@ void *serveNM_Requests(void *args)
 				break;
 			}
 		}
-		else if(strcmp(request_command, "MKDIR") == 0)
+		else if (strcmp(request_command, "MKDIR") == 0)
 		{
 			// RMFILE path
 			status = makeDirectory(path);
@@ -182,7 +186,7 @@ void *serveNM_Requests(void *args)
 				break;
 			}
 		}
-		else if(strcmp(request_command, "RMDIR") == 0)
+		else if (strcmp(request_command, "RMDIR") == 0)
 		{
 			// RMFILE path
 			status = removeDirectory(path);
@@ -208,7 +212,7 @@ void *serveNM_Requests(void *args)
 				break;
 			}
 		}
-		else if(strcmp(request_command, "MKFILE") == 0)
+		else if (strcmp(request_command, "MKFILE") == 0)
 		{
 			// RMFILE path
 			status = makeFile(path);
@@ -438,8 +442,8 @@ int main(int argc, char *argv[])
 	int cliSock = initialzeClientsConnection(cliPort);
 	printf(GREEN_COLOR "[+] Storage Server Initialized\n" RESET_COLOR);
 
-	int nmSock1 = initializeNMConnection("127.0.0.1", mainPort, nmPort, cliPort); // for feedback transfer
-	int nmSock2 = initializeNMConnectionForRecords("127.0.0.1", mainPort);		  // for records
+	nmSock1 = initializeNMConnection("127.0.0.1", mainPort, nmPort, cliPort); // for feedback transfer
+	int nmSock2 = initializeNMConnectionForRecords("127.0.0.1", mainPort);	  // for records
 
 	printf(GREEN_COLOR "[+] Connected to Naming Server\n" RESET_COLOR);
 	printf(YELLOW_COLOR "Port For NM Communication: %d\nPort for Client Communication: %d\n" RESET_COLOR, nmPort, cliPort);
