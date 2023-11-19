@@ -92,7 +92,7 @@ void *serveNM_Requests(void *args)
 	{
 		char buffer[4096];
 		bzero(buffer, sizeof(buffer));
-		
+
 		int bytesRecv = recv(nmfd, buffer, sizeof(buffer), 0);
 		if (bytesRecv == -1)
 		{
@@ -152,7 +152,7 @@ void *serveNM_Requests(void *args)
 			char *perms = strtok(NULL, " \t\n");
 			if (perms == NULL)
 			{
-				perms= malloc(sizeof(char)*1024);
+				perms = malloc(sizeof(char) * 1024);
 				strcpy(perms, "drwxr-xr-x");
 			}
 
@@ -212,11 +212,67 @@ void *serveNM_Requests(void *args)
 			char *perms = strtok(NULL, " \t\n");
 			if (perms == NULL)
 			{
-				perms= malloc(sizeof(char)*1024);
+				perms = malloc(sizeof(char) * 1024);
 				strcpy(perms, "-rw-r--r--");
 			}
 
 			status = makeFile(path, perms);
+			switch (status)
+			{
+			case 0:
+				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				strcpy(statusMsg, "SUCCESS");
+				break;
+			case -1:
+				handleFileOperationError("file_not_found");
+				strcpy(statusMsg, "file_not_found");
+				break;
+			case -2:
+				handleFileOperationError("not_file");
+				strcpy(statusMsg, "not_file");
+				break;
+			case -3:
+				handleSYSErrors("creat");
+				strcpy(statusMsg, "creat");
+				break;
+			default:
+				break;
+			}
+		}
+		else if (strcmp(request_command, "WRITEFILE") == 0)
+		{
+			status = sendFileCopy(path, nmfd); // error
+			switch (status)
+			{
+			case 0:
+				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				strcpy(statusMsg, "SUCCESS");
+				break;
+			case -1:
+				handleFileOperationError("file_not_found");
+				strcpy(statusMsg, "file_not_found");
+				break;
+			case -2:
+				handleFileOperationError("not_file");
+				strcpy(statusMsg, "not_file");
+				break;
+			case -3:
+				handleSYSErrors("creat");
+				strcpy(statusMsg, "creat");
+				break;
+			default:
+				break;
+			}
+		}
+		else if (strcmp(request_command, "READFILE") == 0)
+		{
+			char *perms = strtok(NULL, " \t\n");
+			if (perms == NULL)
+			{
+				perms = malloc(sizeof(char) * 1024);
+				strcpy(perms, "-rw-r--r--");
+			}
+			status = receiveFileCopy(path, nmfd, perms); // error
 			switch (status)
 			{
 			case 0:

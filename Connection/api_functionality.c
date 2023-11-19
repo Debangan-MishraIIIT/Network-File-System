@@ -637,3 +637,110 @@ int makeFile(char *path, char *perms)
     }
     return retval;
 }
+
+int sendFileCopy(char *path, int sockfd)
+{
+
+    if (isDirectory(path))
+    {
+        printf(RED "File Requested is a directory\n" reset);
+        return -1;
+    }
+
+    int fd = open(path, O_RDONLY);
+    if (fd == -1)
+    {
+        perror("open");
+        return -1;
+    }
+
+    char buf[MAX_SIZE];
+    ssize_t bytes_read = read(fd, buf, MAX_SIZE);
+
+    while (bytes_read > 0)
+    {
+        ssize_t resp = send(sockfd, buf, bytes_read, 0);
+        if (resp == -1)
+        {
+            perror("send");
+            return -1;
+        }
+
+        // Wait for acknowledgment from the client
+        char recACK[MAX_SIZE];
+        ssize_t ack_resp = recv(sockfd, recACK, sizeof(recACK), 0);
+        if (ack_resp == -1)
+        {
+            perror("read ACK");
+            return -1;
+        }
+
+        bzero(buf, MAX_SIZE);
+        bytes_read = read(fd, buf, MAX_SIZE);
+    }
+
+    if (bytes_read == -1)
+    {
+        perror("read");
+        return -1;
+    }
+
+    close(fd);
+
+    // Send "STOP" signal
+    char stopSignal[MAX_SIZE];
+    strcpy(stopSignal, "STOP");
+    ssize_t stop_resp = write(sockfd, stopSignal, strlen(stopSignal));
+
+    if (stop_resp == -1)
+    {
+        perror("write stop");
+        return -1;
+    }
+
+    return 0; // Success
+}
+
+int receiveFileCopy(char *path, int sockfd, char* perms)
+{
+    mode_t mode= reversePermissions(perms);
+    int fd = open(path, O_WRONLY | O_CREAT, mode);
+    if (fd == -1)
+    {
+        perror("open");
+        return -1;
+    }
+
+    char buf[MAX_SIZE];
+    ssize_t bytes_read = recv(sockfd, buf, MAX_SIZE, 0);
+
+    while (bytes_read > 0)
+    {
+        if (strstr(buf, "STOP"))
+            break;
+
+        ssize_t resp = write(fd, buf, bytes_read);
+
+        // Send acknowledgment to the server
+        char sendACK[MAX_SIZE] = "ACK";
+        ssize_t ack_resp = send(sockfd, sendACK, sizeof(sendACK), 0);
+
+        if (resp == -1 || ack_resp == -1)
+        {
+            perror("write");
+            return -1;
+        }
+
+        bzero(buf, MAX_SIZE);
+        bytes_read = recv(sockfd, buf, MAX_SIZE, 0);
+    }
+
+    if (bytes_read == -1)
+    {
+        perror("read");
+        return -1;
+    }
+
+    close(fd);
+    return 0; 
+}

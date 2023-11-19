@@ -23,5 +23,7 @@ int removeFile(char *path);
 int removeDirectory(char *path);
 int makeDirectory(char *path, char* perms);
 int makeFile(char *path, char* perms);
+int sendFileCopy(char *path, int sockfd);
+int receiveFileCopy(char *path, int sockfd, char* perms);
 
 #endif

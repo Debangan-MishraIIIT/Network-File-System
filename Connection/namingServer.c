@@ -56,15 +56,8 @@ void removePrefix(char *str, const char *prefix)
     }
 }
 
-char *concatenateStrings(const char *A, const char *B, const char *C, const char *D)
+void concatenateStrings(char *result, const char *A, const char *B, const char *C, const char *D)
 {
-    size_t totalLength = strlen(A) + 1 + strlen(B) + 1 + strlen(C) + 1 + strlen(D) + 1;
-    char *result = (char *)malloc(totalLength);
-    if (result == NULL)
-    {
-        perror("Memory allocation failed"); // error
-    }
-
     strcpy(result, A);
     strcat(result, " ");
     strcat(result, B);
@@ -72,36 +65,86 @@ char *concatenateStrings(const char *A, const char *B, const char *C, const char
     strcat(result, C);
     strcat(result, " ");
     strcat(result, D);
-
-    return result;
 }
 
-int copyLocally(struct record *curr_rec, char *mdir, char *base_dir, struct ssDetails *ss)
+int copyLocally(struct record *curr_rec, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read)
 {
     if (curr_rec == NULL)
     {
         return 0;
     }
     char *dup = strdup(curr_rec->path);
-    int res1 = 0, res3=0;
+    int res1 = 0, res3 = 0;
+
+    char new_request[4096];
+    bzero(new_request, sizeof(new_request));
+    int bytesRecv;
 
     if (curr_rec->isDir)
     {
         removePrefix(dup, mdir);
-        char *new_request = concatenateStrings("MKDIR", base_dir, dup, curr_rec->originalPerms);
+        concatenateStrings(new_request, "MKDIR", base_dir, dup, curr_rec->originalPerms);
         printf("%s\n", new_request);
         res3 = send(ss->connfd, new_request, sizeof(new_request), 0);
-        res1 = copyLocally(curr_rec->firstChild, mdir, base_dir, ss);
+        char ackStatus[4096];
+        bzero(ackStatus, sizeof(ackStatus));
+        bytesRecv = recv(ss->connfd, ackStatus, sizeof(ackStatus), 0);
+        res1 = copyLocally(curr_rec->firstChild, mdir, base_dir, ss, ss_read);
     }
     else
     {
         removePrefix(dup, mdir);
-        char *new_request = concatenateStrings("MKFILE", base_dir, dup, curr_rec->originalPerms);
+        concatenateStrings(new_request, "MKFILE", base_dir, dup, curr_rec->originalPerms);
         printf("%s\n", new_request);
-        res3 = send(ss->connfd, new_request, sizeof(new_request), 0);
+        res3 = send(ss->connfd, new_request, sizeof(new_request), 0); // error
+        char ackStatus1[4096];
+        bzero(ackStatus1, sizeof(ackStatus1));
+        bytesRecv = recv(ss->connfd, ackStatus1, sizeof(ackStatus1), 0);
+
+        // send request for downloading file locally
+        char file_buffer[4096];
+        bzero(file_buffer, sizeof(file_buffer));
+
+        bzero(file_buffer, sizeof(file_buffer));
+        strcpy(file_buffer, "WRITEFILE");
+        strcat(file_buffer, " ");
+        strcat(file_buffer, curr_rec->path);
+        printf("file request: %s\n", file_buffer);
+
+        // receive file
+        int res4 = send(ss_read->connfd, file_buffer, sizeof(file_buffer), 0);                  // error
+        int resp = receiveFileCopy("./tempfile.txt", ss_read->connfd, curr_rec->originalPerms); // error
+
+        char ackStatus2[4096];
+        bzero(ackStatus2, sizeof(ackStatus2));
+        bytesRecv = recv(ss_read->connfd, ackStatus2, sizeof(ackStatus2), 0);
+
+        // send request for accepting file in server
+        char file_buffer2[4096];
+        bzero(file_buffer2, sizeof(file_buffer2));
+
+        bzero(file_buffer2, sizeof(file_buffer));
+        strcpy(file_buffer2, "READFILE");
+        strcat(file_buffer2, " ");
+        strcat(file_buffer2, base_dir);
+        strcat(file_buffer2, "/");
+        strcat(file_buffer2, dup);
+        strcat(file_buffer2, " ");
+        strcat(file_buffer2, curr_rec->originalPerms);
+        printf("file request: %s\n", file_buffer2);
+
+        // send file
+        int res5 = send(ss->connfd, file_buffer2, sizeof(file_buffer2), 0);                  // error
+        int resp2 = sendFileCopy("./tempfile.txt", ss->connfd); // error
+
+        char ackStatus3[4096];
+        bzero(ackStatus3, sizeof(ackStatus3));
+        bytesRecv = recv(ss->connfd, ackStatus3, sizeof(ackStatus3), 0);
+
+        remove("./tempfile.txt");
     }
-    int res2 = copyLocally(curr_rec->nextSibling, mdir, base_dir, ss);
-    if (res1 == 0 && res2 == 0 && res3>0)
+    int res2 = copyLocally(curr_rec->nextSibling, mdir, base_dir, ss, ss_read);
+    if (res1 == 0 && res2 == 0 && res3 > 0)
     {
         return 0;
     }
@@ -412,7 +455,7 @@ void *acceptClientRequests(void *args)
             //     handleNetworkErrors("send");
             // }
 
-            int resp = copyLocally(r1, mdir, r2->path, r2->orignalSS); // error
+            int resp = copyLocally(r1, mdir, r2->path, r2->orignalSS, r1->orignalSS); // error
 
             char ackStatus[4096];
             if (resp == 0)
