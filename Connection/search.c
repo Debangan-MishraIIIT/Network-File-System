@@ -75,7 +75,7 @@ int deleteTrieNode(TrieNode *root, char *file_path)
         temp = temp->children[index];
     }
 
-    // If the TrieNode has a table entry, delete it
+    // // If the TrieNode has a table entry, delete it
     // if (temp->tableEntry)
     // {
     //     free(temp->tableEntry);
@@ -85,6 +85,5 @@ int deleteTrieNode(TrieNode *root, char *file_path)
     // Remove the TrieNode from its parent
     free(prev->children[(int)file_path[i - 1]]);
     prev->children[(int)file_path[i - 1]] = NULL;
-
     return 1;
 }

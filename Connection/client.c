@@ -166,11 +166,25 @@ int sendRequest(char *input, int sockfd)
 		else if (ss.id == -1)
 		{
 			handleFileOperationError("no_path");
+			char ackBUFFER[10];
+			strcpy(ackBUFFER, "done");
+			int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
+			if (bSent == -1)
+			{
+				handleNetworkErrors("send");
+			}
 			return -2;
 		}
 		else if (ss.id == -2)
 		{
 			handleFileOperationError("no_file");
+			char ackBUFFER[10];
+			strcpy(ackBUFFER, "done");
+			int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
+			if (bSent == -1)
+			{
+				handleNetworkErrors("send");
+			}
 			return -2;
 		}
 
@@ -184,6 +198,13 @@ int sendRequest(char *input, int sockfd)
 		if (bytesSent == -1)
 		{
 			handleNetworkErrors("recv");
+			char ackBUFFER[10];
+			strcpy(ackBUFFER, "done");
+			int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
+			if (bSent == -1)
+			{
+				handleNetworkErrors("send");
+			}
 			return -2;
 		}
 		// printf("\'%s\' sent to SS %s:%d\n", input, ss.ip, ss.cliPort);
@@ -194,11 +215,25 @@ int sendRequest(char *input, int sockfd)
 		if (bytesRecv == -1)
 		{
 			handleNetworkErrors("recv");
+			char ackBUFFER[10];
+			strcpy(ackBUFFER, "done");
+			int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
+			if (bSent == -1)
+			{
+				handleNetworkErrors("send");
+			}
 			return -2;
 		}
 		if (strlen(perms) != 10)
 		{
 			handleSYSErrors(perms);
+			char ackBUFFER[10];
+			strcpy(ackBUFFER, "done");
+			int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
+			if (bSent == -1)
+			{
+				handleNetworkErrors("send");
+			}
 			return -2;
 		}
 
@@ -214,6 +249,13 @@ int sendRequest(char *input, int sockfd)
 		else
 		{
 			handleFileOperationError("recv_file");
+			char ackBUFFER[10];
+			strcpy(ackBUFFER, "done");
+			int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
+			if (bSent == -1)
+			{
+				handleNetworkErrors("send");
+			}
 			return -2;
 		}
 
@@ -226,6 +268,13 @@ int sendRequest(char *input, int sockfd)
 		else
 		{
 			handleSYSErrors("chmod");
+			char ackBUFFER[10];
+			strcpy(ackBUFFER, "done");
+			int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
+			if (bSent == -1)
+			{
+				handleNetworkErrors("send");
+			}
 			return -2;
 		}
 
@@ -268,6 +317,13 @@ int sendRequest(char *input, int sockfd)
 			if (writeFile(recvFileName, editor) == -1)
 			{
 				handleSYSErrors("write");
+				char ackBUFFER[10];
+				strcpy(ackBUFFER, "done");
+				int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
+				if (bSent == -1)
+				{
+					handleNetworkErrors("send");
+				}
 				return -2;
 			}
 		}
@@ -275,16 +331,31 @@ int sendRequest(char *input, int sockfd)
 		// send the file to ss
 		if (!sendFile(recvFileName, connfd))
 		{
-			printf(YELLOW_COLOR"Sent the file to Storage Server\n"reset);
+			printf(YELLOW_COLOR "Sent the file to Storage Server\n" reset);
 		}
 		else
 		{
 			handleFileOperationError("send_file");
 			removeFile(recvFileName);
+			char ackBUFFER[10];
+			strcpy(ackBUFFER, "done");
+			int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
+			if (bSent == -1)
+			{
+				handleNetworkErrors("send");
+			}
 			return -2;
 		}
 
 		removeFile(recvFileName);
+		// add code for sending ack to nm
+		char ackBUFFER[10];
+		strcpy(ackBUFFER, "done");
+		int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
+		if (bSent == -1)
+		{
+			handleNetworkErrors("send");
+		}
 		return 0;
 	}
 	else if (strcmp(request_command, "READ") == 0)
