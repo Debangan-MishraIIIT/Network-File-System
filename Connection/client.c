@@ -241,6 +241,7 @@ int sendRequest(char *input, int sockfd)
 			printf("5. none (edit locally)\n" RESET_COLOR);
 			scanf("%s", editor);
 			if (!strcmp(editor, "gedit") || !strcmp(editor, "vim") || !strcmp(editor, "nano") || !strcmp(editor, "emacs") || !strcmp(editor, "none") || !strcmp(editor, "1") || !strcmp(editor, "2") || !strcmp(editor, "3") || !strcmp(editor, "4") || !strcmp(editor, "5"))
+
 			{
 				break;
 			}
