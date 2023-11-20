@@ -68,8 +68,9 @@ void handleFileOperationError(char *error)
 
     if (!strcmp(error, "send_file"))
         printf(RED "ERROR 510: COULD NOT SEND FILE (send_file)\n" reset);
-    
-    
+
+    if (!strcmp(error, "dir_not_empty"))
+        printf(RED "ERROR 510: DIRECTORY IS NOT EMPTY (check_empty)\n" reset);
 }
 
 // syscall and input errors (all in blue)
@@ -104,10 +105,10 @@ void handleSYSErrors(char *error)
 
     if (!strcmp(error, "utimensat"))
         printf(LIGHT_RED_COLOR "ERROR 609: COULD NOT CHANGE MODIFICATION TIME (utimensat)\n" reset);
-    
+
     if (!strcmp(error, "chmod"))
         printf(LIGHT_RED_COLOR "ERROR 610: COULD NOT CHANGE PERMISSIONS (chmod)\n" reset);
-    
+
     if (!strcmp(error, "execvp"))
         printf(LIGHT_RED_COLOR "ERROR 611: COULD NOT EXECUTE COMMAND (execvp)\n" reset);
 }

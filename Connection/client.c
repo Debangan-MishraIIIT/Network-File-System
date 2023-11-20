@@ -33,7 +33,7 @@ int sendRequest(char *input, int sockfd)
 	char *request_command = arg_arr[0];
 
 	// privileged
-	if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0)
+	if (strcmp(request_command, "MKDIR") == 0 || strcmp(request_command, "MKFILE") == 0 || strcmp(request_command, "RMFILE") == 0 || strcmp(request_command, "RMDIR") == 0 || strcmp(request_command, "COPY") == 0)
 	{
 		int bytesSent = send(sockfd, input, strlen(input), 0);
 		if (bytesSent == -1)
@@ -70,6 +70,20 @@ int sendRequest(char *input, int sockfd)
 				return -2;
 			}
 		}
+		else if (strcmp(request_command, "COPY") == 0)
+		{
+			if (strcmp(ackMsg, "SUCCESS") == 0)
+			{
+				printf(GREEN_COLOR "%s successfully copied\n" RESET_COLOR, arg_arr[1]);
+				return 0;
+			}
+			else
+			{
+				handleAllErrors(ackMsg);
+				printf(RED_COLOR "%s could not be copied\n" RESET_COLOR, arg_arr[1]);
+				return -2;
+			}
+		}
 		else if (strcmp(request_command, "MKFILE") == 0)
 		{
 			if (strcmp(ackMsg, "SUCCESS") == 0)
@@ -93,7 +107,15 @@ int sendRequest(char *input, int sockfd)
 			}
 			else
 			{
-				handleAllErrors(ackMsg);
+				if (strcmp(ackMsg, "rmdir") == 0)
+				{
+					handleFileOperationError("dir_not_empty");
+				}
+				else
+				{
+					handleAllErrors(ackMsg);
+				}
+
 				printf(RED_COLOR "Directory %s could not be removed\n" RESET_COLOR, arg_arr[1]);
 				return -2;
 			}
@@ -180,8 +202,10 @@ int sendRequest(char *input, int sockfd)
 			return -2;
 		}
 
-		printf("permissions: %s\n", perms);
-		char recvFileName[1024] = "temp.txt\0";
+		// printf("permissions: %s\n", perms);
+		char recvFileName[1024];
+		strcpy(recvFileName, basename(arg_arr[1]));
+		strcpy(recvFileName + strlen(recvFileName), "_copy");
 		// recieve file
 		if (!receiveFile(recvFileName, connfd))
 		{
@@ -209,29 +233,30 @@ int sendRequest(char *input, int sockfd)
 		char editorList[4][100] = {"gedit", "vim", "nano", "emacs"};
 		while (1)
 		{
-			printf("Choose Editor to edit file:\n");
+			printf(YELLOW_COLOR "Choose Editor to edit file:\n");
 			printf("1. gedit\n");
 			printf("2. vim\n");
 			printf("3. nano\n");
-			// printf("4. code\n");
 			printf("4. emacs\n");
-			printf("5. none (edit locally)\n");
+			printf("5. none (edit locally)\n" RESET_COLOR);
 			scanf("%s", editor);
-			if (!strcmp(editor, "gedit") || !strcmp(editor, "vim") || !strcmp(editor, "nano") || !strcmp(editor, "emacs") || !strcmp(editor, "none") || !strcmp(editor, "1") || !strcmp(editor, "2") || !strcmp(editor, "3") || !strcmp(editor, "4") || !strcmp(editor, "5") )
+			if (!strcmp(editor, "gedit") || !strcmp(editor, "vim") || !strcmp(editor, "nano") || !strcmp(editor, "emacs") || !strcmp(editor, "none") || !strcmp(editor, "1") || !strcmp(editor, "2") || !strcmp(editor, "3") || !strcmp(editor, "4") || !strcmp(editor, "5"))
+
 			{
 				break;
 			}
 			else
 			{
-				printf("Invalid Editor!");
+				printf(RED_COLOR "Invalid Editor!\n" YELLOW_COLOR "Choose Editor:\n" RESET_COLOR);
 			}
 		}
 
 		if (!strcmp(editor, "none") || !strcmp(editor, "5"))
 		{
-			printf("File has been added to the current directory\n");
-			printf("Press ENTER after making changes locally to upload\n");
+			printf(YELLOW_COLOR "File has been added to the current directory\n");
+			printf("Press ENTER after making changes locally to upload\n" RESET_COLOR);
 			char c;
+			scanf("%c", &c);
 			scanf("%c", &c);
 		}
 		else
@@ -296,7 +321,7 @@ int sendRequest(char *input, int sockfd)
 		}
 		else if (ss.id == -2)
 		{
-			handleFileOperationError("no_file");
+			handleFileOperationError("not_file");
 			return -2;
 		}
 
@@ -378,7 +403,7 @@ int sendRequest(char *input, int sockfd)
 			}
 		}
 
-		if (!strcmp(editor, "terminal") || !strcmp(editor, "6"))
+		if (!strcmp(editor, "terminal") || !strcmp(editor, "5"))
 		{
 			if (readFile(recvFileName, "cat") == -1)
 			{
@@ -436,7 +461,7 @@ int sendRequest(char *input, int sockfd)
 		}
 		else if (ss.id == -2)
 		{
-			handleFileOperationError("no_file");
+			handleFileOperationError("not_file");
 			return -2;
 		}
 

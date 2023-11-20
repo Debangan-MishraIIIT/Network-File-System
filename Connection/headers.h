@@ -86,6 +86,9 @@ struct record
     struct record *nextSibling;
     struct record *parent;
     struct record *prevSibling;
+    pthread_mutex_t record_lock; 
+
+    bool isValid; // only used in copy to prevent recursive dir copying
 };
 
 struct fileDetails

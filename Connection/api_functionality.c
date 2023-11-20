@@ -5,7 +5,7 @@ API CALLS:
 MKDIR
 RMFILE
 MKFILE
-COPYDIR
+COPY
 */
 
 int send_file(char *filename, int sockfd)
@@ -338,7 +338,7 @@ int handle_naming_server_commands(char *command, char *inputS, int nmfd)
         return -1;
     }
 
-    if (strcmp("RMDIR", command) != 0 && strcmp("MKFILE", command) != 0 && strcmp("MKDIR", command) != 0 && strcmp("COPYFILE", command) != 0 && strcmp("COPYDIR", command) != 0 && strcmp("RMFILE", command) != 0)
+    if (strcmp("RMDIR", command) != 0 && strcmp("MKFILE", command) != 0 && strcmp("MKDIR", command) != 0 && strcmp("COPYFILE", command) != 0 && strcmp("COPY", command) != 0 && strcmp("RMFILE", command) != 0)
     {
         handle_errors("Invalid Command");
         return -1;
@@ -398,7 +398,7 @@ int handle_naming_server_commands(char *command, char *inputS, int nmfd)
             if (err3 == -1)
                 handle_errors("delete file and directory");
         }
-        else if (strcmp(command, "COPYDIR") == 0 || strcmp(command, "COPYFILE") == 0)
+        else if (strcmp(command, "COPY") == 0 || strcmp(command, "COPYFILE") == 0)
         {
             //
             int resp = recursive_directory_sending(lastToken, nmfd);
@@ -452,7 +452,7 @@ void file_separator(char *array[], char *inputS)
 
     while (token != NULL)
     {
-        if (count == 3)
+        if (count >= 3)
         {
             handle_errors("invalid input");
             break;
@@ -462,6 +462,61 @@ void file_separator(char *array[], char *inputS)
         count++;
         token = strtok(NULL, " ");
     }
+}
+
+mode_t reversePermissions(char *perms)
+{
+    mode_t mode = 0;
+
+    // Check if the file is a directory
+    mode |= (perms[0] == 'd') ? S_IFDIR : 0;
+
+    // Owner permissions
+    mode |= (perms[1] == 'r') ? S_IRUSR : 0;
+    mode |= (perms[2] == 'w') ? S_IWUSR : 0;
+    mode |= (perms[3] == 'x') ? S_IXUSR : 0;
+
+    // Group permissions
+    mode |= (perms[4] == 'r') ? S_IRGRP : 0;
+    mode |= (perms[5] == 'w') ? S_IWGRP : 0;
+    mode |= (perms[6] == 'x') ? S_IXGRP : 0;
+
+    // Others permissions
+    mode |= (perms[7] == 'r') ? S_IROTH : 0;
+    mode |= (perms[8] == 'w') ? S_IWOTH : 0;
+    mode |= (perms[9] == 'x') ? S_IXOTH : 0;
+
+    return mode;
+}
+
+// void convertPermissions(mode_t st_mode, char *perms)
+// {
+//     perms[0] = (S_ISDIR(st_mode)) ? 'd' : '-';
+//     perms[1] = (st_mode & S_IRUSR) ? 'r' : '-';
+//     perms[2] = (st_mode & S_IWUSR) ? 'w' : '-';
+//     perms[3] = (st_mode & S_IXUSR) ? 'x' : '-';
+//     perms[4] = (st_mode & S_IRGRP) ? 'r' : '-';
+//     perms[5] = (st_mode & S_IWGRP) ? 'w' : '-';
+//     perms[6] = (st_mode & S_IXGRP) ? 'x' : '-';
+//     perms[7] = (st_mode & S_IROTH) ? 'r' : '-';
+//     perms[8] = (st_mode & S_IWOTH) ? 'w' : '-';
+//     perms[9] = (st_mode & S_IXOTH) ? 'x' : '-';
+//     perms[10] = '\0'; // Null-terminate the string
+// }
+
+void convertPermissions(mode_t mode, char *str)
+{
+    str[0] = S_ISDIR(mode) ? 'd' : '-';
+    str[1] = (mode & S_IRUSR) ? 'r' : '-';
+    str[2] = (mode & S_IWUSR) ? 'w' : '-';
+    str[3] = (mode & S_IXUSR) ? 'x' : '-';
+    str[4] = (mode & S_IRGRP) ? 'r' : '-';
+    str[5] = (mode & S_IWGRP) ? 'w' : '-';
+    str[6] = (mode & S_IXGRP) ? 'x' : '-';
+    str[7] = (mode & S_IROTH) ? 'r' : '-';
+    str[8] = (mode & S_IWOTH) ? 'w' : '-';
+    str[9] = (mode & S_IXOTH) ? 'x' : '-';
+    str[10] = '\0';
 }
 
 int removeFile(char *path)
@@ -512,8 +567,9 @@ int removeDirectory(char *path)
     return 0;
 }
 
-int makeDirectory(char *path)
+int makeDirectory(char *path, char *perms)
 {
+    mode_t mode = reversePermissions(perms);
     char *baseDir = dirname(strdup(path));
     int retval = 0;
     if (check_path_exists(path))
@@ -534,7 +590,7 @@ int makeDirectory(char *path)
             }
             else
             {
-                int ret = mkdir(path, 0755);
+                int ret = mkdir(path, mode);
                 if (ret == -1)
                 {
                     retval = -3; // mkdir syscall
@@ -545,8 +601,9 @@ int makeDirectory(char *path)
     return retval;
 }
 
-int makeFile(char *path)
+int makeFile(char *path, char *perms)
 {
+    mode_t mode = reversePermissions(perms);
     char *baseDir = dirname(strdup(path));
     int retval = 0;
     if (check_path_exists(path))
@@ -567,7 +624,7 @@ int makeFile(char *path)
             }
             else
             {
-                int ret = creat(path, 0644);
+                int ret = creat(path, mode);
                 if (ret == -1)
                 {
                     retval = -1; // creat syscall
@@ -718,17 +775,6 @@ int sendFile(char *path, int sockfd)
 
 int receiveFile(char *path, int sockfd)
 {
-    // if (!check_path_exists(path))
-    // {
-    //     handleFileOperationError("file_not_found");
-    //     return -1;
-    // }
-    // if (isDirectory(path))
-    // {
-    //     handleFileOperationError("not_file");
-    //     return -2;
-    // }
-
     int fd = open(path, O_WRONLY | O_CREAT, 0644);
     if (fd == -1)
     {
@@ -742,7 +788,9 @@ int receiveFile(char *path, int sockfd)
     while (bytes_read > 0)
     {
         if (strstr(buf, "STOP"))
+        {
             break;
+        }
 
         ssize_t resp = write(fd, buf, bytes_read);
 
@@ -779,27 +827,147 @@ int receiveFile(char *path, int sockfd)
     return 0; // Success
 }
 
-mode_t reversePermissions(char *perms)
+int sendFileCopy(char *path, int sockfd, bool finalAck)
 {
-    mode_t mode = 0;
+    if (!check_path_exists(path))
+    {
+        handleFileOperationError("file_not_found");
+        return -1;
+    }
+    if (isDirectory(path))
+    {
+        handleFileOperationError("not_file");
+        return -2;
+    }
 
-    // Check if the file is a directory
-    mode |= (perms[0] == 'd') ? S_IFDIR : 0;
+    int fd = open(path, O_RDONLY);
+    if (fd == -1)
+    {
+        handleSYSErrors("open");
+        return -3;
+    }
 
-    // Owner permissions
-    mode |= (perms[1] == 'r') ? S_IRUSR : 0;
-    mode |= (perms[2] == 'w') ? S_IWUSR : 0;
-    mode |= (perms[3] == 'x') ? S_IXUSR : 0;
+    char buf[MAX_SIZE];
+    ssize_t bytes_read = read(fd, buf, MAX_SIZE);
 
-    // Group permissions
-    mode |= (perms[4] == 'r') ? S_IRGRP : 0;
-    mode |= (perms[5] == 'w') ? S_IWGRP : 0;
-    mode |= (perms[6] == 'x') ? S_IXGRP : 0;
+    while (bytes_read > 0)
+    {
+        ssize_t resp = send(sockfd, buf, bytes_read, 0);
+        if (resp == -1)
+        {
+            handleNetworkErrors("send");
+            return -4;
+        }
 
-    // Others permissions
-    mode |= (perms[7] == 'r') ? S_IROTH : 0;
-    mode |= (perms[8] == 'w') ? S_IWOTH : 0;
-    mode |= (perms[9] == 'x') ? S_IXOTH : 0;
+        // Wait for acknowledgment from the client
+        char recACK[MAX_SIZE];
+        ssize_t ack_resp = recv(sockfd, recACK, sizeof(recACK), 0);
+        if (ack_resp == -1)
+        {
+            handleNetworkErrors("recv");
+            return -5;
+        }
 
-    return mode;
+        bzero(buf, MAX_SIZE);
+        bytes_read = read(fd, buf, MAX_SIZE);
+    }
+
+    if (bytes_read == -1)
+    {
+        handleSYSErrors("read");
+        return -6;
+    }
+
+    close(fd);
+
+    // Send "STOP" signal
+    char stopSignal[MAX_SIZE];
+    strcpy(stopSignal, "STOP");
+    ssize_t stop_resp = write(sockfd, stopSignal, strlen(stopSignal));
+
+    if (stop_resp == -1)
+    {
+        handleSYSErrors("write");
+        return -7;
+    }
+
+    if (finalAck)
+    {
+        // get final ack
+        ssize_t ack_resp = recv(sockfd, stopSignal, sizeof(stopSignal), 0);
+        if (ack_resp == -1)
+        {
+            handleNetworkErrors("recv");
+            return -5;
+        }
+    }
+
+    return 0; // Success
+}
+
+int receiveFileCopy(char *path, int sockfd, char *perms, bool finalAck)
+{
+    mode_t mode = reversePermissions(perms);
+    int fd = open(path, O_WRONLY | O_CREAT, mode);
+    if (fd == -1)
+    {
+        handleSYSErrors("open");
+        return -3;
+    }
+
+    char buf[MAX_SIZE];
+    ssize_t bytes_read = recv(sockfd, buf, MAX_SIZE, 0);
+
+    while (bytes_read > 0)
+    {
+        if (strstr(buf, "STOP"))
+        {
+            break;
+        }
+
+        ssize_t resp = write(fd, buf, bytes_read);
+
+        // Send acknowledgment to the server
+        char sendACK[MAX_SIZE] = "ACK";
+        ssize_t ack_resp = send(sockfd, sendACK, sizeof(sendACK), 0);
+        if (ack_resp == -1)
+        {
+            handleNetworkErrors("send");
+            return -4;
+        }
+
+        if (resp == -1 || ack_resp == -1)
+        {
+            handleSYSErrors("write");
+            return -7;
+        }
+
+        bzero(buf, MAX_SIZE);
+        bytes_read = recv(sockfd, buf, MAX_SIZE, 0);
+        if (bytes_read == -1)
+        {
+            handleNetworkErrors("recv");
+            return -5;
+        }
+    }
+
+    if (bytes_read == -1)
+    {
+        handleNetworkErrors("recv");
+        return -5;
+    }
+
+    if (finalAck)
+    {
+        // send final ack
+        ssize_t ack_resp = send(sockfd, "OVER", sizeof("OVER"), 0);
+        if (ack_resp == -1)
+        {
+            handleNetworkErrors("send");
+            return -4;
+        }
+    }
+
+    close(fd);
+    return 0; // Success
 }

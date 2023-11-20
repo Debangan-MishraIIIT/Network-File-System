@@ -114,8 +114,8 @@ void addToRecords(struct record *r)
 
 void removeFromRecords(char *path)
 {
-    pthread_mutex_lock(&recordsLock);
     struct record *r = getRecord(path);
+    pthread_mutex_lock(&recordsLock);
     removeFileFromCache(myCache, path);
     deleteTrieNode(trieRoot, path);
 
@@ -138,6 +138,179 @@ void removeFromRecords(char *path)
     free(r->path);
     free(r);
     pthread_mutex_unlock(&recordsLock);
+}
+
+void removePrefix(char *str, const char *prefix)
+{
+    size_t prefixLen = strlen(prefix);
+    size_t strLen = strlen(str);
+
+    if (strLen >= prefixLen && strncmp(str, prefix, prefixLen) == 0)
+    {
+        memmove(str, str + prefixLen, strLen - prefixLen + 1); // +1 to include the null terminator
+        if (str[0] == '/')
+        {
+            memmove(str, str + 1, strLen - prefixLen); // Remove the leading '/'
+        }
+    }
+}
+
+void concatenateStrings(char *result, const char *A, const char *B, const char *C, const char *D)
+{
+    strcpy(result, A);
+    strcat(result, " ");
+    strcat(result, B);
+    strcat(result, "/");
+    strcat(result, C);
+    strcat(result, " ");
+    strcat(result, D);
+}
+
+void makeAccessibleAferCopy(struct record *r)
+{
+    if (r == NULL)
+    {
+        return;
+    }
+    struct record *child = r->firstChild;
+    while (child != NULL)
+    {
+        if (child->isValid == false)
+        {
+            makeAccessibleAferCopy(child);
+        }
+        child = child->nextSibling;
+    }
+}
+
+int copyLocally(struct record *curr_rec, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read)
+{
+    if (curr_rec == NULL || curr_rec->isValid == false)
+    {
+        return 0;
+    }
+    char *dup = strdup(curr_rec->path);
+    int res1 = 0, res3 = 0;
+
+    char new_request[4096];
+    bzero(new_request, sizeof(new_request));
+    int bytesRecv;
+
+    if (curr_rec->isDir)
+    {
+        removePrefix(dup, mdir);
+        concatenateStrings(new_request, "MKDIR", base_dir, dup, curr_rec->originalPerms);
+
+        res3 = send(ss->connfd, new_request, sizeof(new_request), 0);
+        char ackStatus[4096];
+        bzero(ackStatus, sizeof(ackStatus));
+        bytesRecv = recv(ss->connfd, ackStatus, sizeof(ackStatus), 0);
+
+        // add to record
+        char *arg_arr[3];
+        parse_input(arg_arr, new_request);
+        struct record *r = malloc(sizeof(struct record));
+        r->path = malloc(sizeof(char) * 4096);
+        strcpy(r->path, arg_arr[1]);
+        r->orignalSS = ss;
+        strcpy(r->originalPerms, arg_arr[2]);
+        r->isDir = true;
+        strcpy(r->currentPerms, arg_arr[2]);
+        r->size = 0;
+        r->firstChild = NULL;
+        r->nextSibling = NULL;
+        r->parent = NULL;
+        r->prevSibling = NULL;
+        r->isValid = false;
+        pthread_mutex_init(&(r->record_lock), NULL);
+        addToRecords(r);
+
+        res1 = copyLocally(curr_rec->firstChild, mdir, base_dir, ss, ss_read);
+    }
+    else
+    {
+        removePrefix(dup, mdir);
+        concatenateStrings(new_request, "MKFILE", base_dir, dup, curr_rec->originalPerms);
+
+        res3 = send(ss->connfd, new_request, sizeof(new_request), 0);
+        char ackStatus1[4096];
+        bzero(ackStatus1, sizeof(ackStatus1));
+        bytesRecv = recv(ss->connfd, ackStatus1, sizeof(ackStatus1), 0);
+
+        // add to record
+        char *arg_arr[3];
+        parse_input(arg_arr, new_request);
+        struct record *r = malloc(sizeof(struct record));
+        r->path = malloc(sizeof(char) * 4096);
+        strcpy(r->path, arg_arr[1]);
+        r->orignalSS = ss;
+        strcpy(r->originalPerms, arg_arr[2]);
+        r->isDir = false;
+        strcpy(r->currentPerms, arg_arr[2]);
+        r->size = 0;
+        r->firstChild = NULL;
+        r->nextSibling = NULL;
+        r->parent = NULL;
+        r->prevSibling = NULL;
+        r->isValid = false;
+        pthread_mutex_init(&(r->record_lock), NULL);
+        addToRecords(r);
+
+        // send request for downloading file locally
+        char file_buffer[4096];
+        bzero(file_buffer, sizeof(file_buffer));
+
+        bzero(file_buffer, sizeof(file_buffer));
+        strcpy(file_buffer, "WRITEFILE");
+        strcat(file_buffer, " ");
+        strcat(file_buffer, curr_rec->path);
+        // printf("file request: %s\n", file_buffer);
+
+        char recvFileName[1024];
+        strcpy(recvFileName, basename(curr_rec->path));
+        strcpy(recvFileName + strlen(recvFileName), "_copy");
+
+        // receive file
+        int res4 = send(ss_read->connfd, file_buffer, sizeof(file_buffer), 0);                    // error
+        int resp = receiveFileCopy(recvFileName, ss_read->connfd, curr_rec->originalPerms, true); // error
+
+        char ackStatus2[4096];
+        bzero(ackStatus2, sizeof(ackStatus2));
+        bytesRecv = recv(ss_read->connfd, ackStatus2, sizeof(ackStatus2), 0);
+
+        // send request for accepting file in server
+        char file_buffer2[4096];
+        bzero(file_buffer2, sizeof(file_buffer2));
+
+        bzero(file_buffer2, sizeof(file_buffer));
+        strcpy(file_buffer2, "READFILE");
+        strcat(file_buffer2, " ");
+        strcat(file_buffer2, base_dir);
+        strcat(file_buffer2, "/");
+        strcat(file_buffer2, dup);
+        strcat(file_buffer2, " ");
+        strcat(file_buffer2, curr_rec->originalPerms);
+        // printf("file request: %s\n", file_buffer2);
+
+        // send file
+        int res5 = send(ss->connfd, file_buffer2, sizeof(file_buffer2), 0); // error
+        int resp2 = sendFileCopy(recvFileName, ss->connfd, false);          // error
+
+        char ackStatus3[4096];
+        bzero(ackStatus3, sizeof(ackStatus3));
+        bytesRecv = recv(ss->connfd, ackStatus3, sizeof(ackStatus3), 0);
+
+        remove(recvFileName);
+    }
+    int res2 = copyLocally(curr_rec->nextSibling, mdir, base_dir, ss, ss_read);
+    if (res1 == 0 && res2 == 0 && res3 > 0)
+    {
+        return 0;
+    }
+    else
+    {
+        return -1; // error
+    }
 }
 
 void logMessage(const char *message, const char *ip, int port)
@@ -202,8 +375,9 @@ void *acceptClientRequests(void *args)
                 }
                 continue;
             }
-            struct ssDetails *ss = r->orignalSS;
 
+            pthread_mutex_lock(&r->record_lock);
+            struct ssDetails *ss = r->orignalSS;
             // sending to ss
             bytesSent = send(ss->connfd, request, sizeof(request), 0);
             if (bytesSent == -1)
@@ -215,6 +389,8 @@ void *acceptClientRequests(void *args)
             char ackStatus[4096];
             bzero(ackStatus, sizeof(ackStatus));
             bytesRecv = recv(ss->connfd, ackStatus, sizeof(ackStatus), 0);
+            pthread_mutex_unlock(&r->record_lock);
+
             if (bytesRecv == -1)
             {
                 handleNetworkErrors("recv");
@@ -278,6 +454,8 @@ void *acceptClientRequests(void *args)
                 }
                 continue;
             }
+
+            pthread_mutex_lock(&r->record_lock);
             struct ssDetails *ss = r->orignalSS;
 
             // sending to ss
@@ -291,6 +469,8 @@ void *acceptClientRequests(void *args)
             char ackStatus[4096];
             bzero(ackStatus, sizeof(ackStatus));
             bytesRecv = recv(ss->connfd, ackStatus, sizeof(ackStatus), 0);
+            pthread_mutex_unlock(&r->record_lock);
+
             if (bytesRecv == -1)
             {
                 handleNetworkErrors("recv");
@@ -321,11 +501,13 @@ void *acceptClientRequests(void *args)
                 r->backupSS1 = NULL;
                 r->backupSS2 = NULL;
                 r->size = 0;
-
+                
                 r->firstChild = NULL;
                 r->nextSibling = NULL;
                 r->parent = NULL;
                 r->prevSibling = NULL;
+                r->isValid = true;
+                pthread_mutex_init(&(r->record_lock), NULL);
 
                 addToRecords(r);
             }
@@ -344,30 +526,88 @@ void *acceptClientRequests(void *args)
             continue;
         }
 
+        else if (strcmp(request_command, "COPY") == 0)
+        {
+            struct record *r1 = getRecord(arg_arr[1]);
+            struct record *r2 = getRecord(arg_arr[2]);
+            if (r1 == NULL || r2 == NULL)
+            {
+                // sending ack status to client
+                handleFileOperationError("no_path");
+                bytesSent = send(cli->connfd, "no_path", sizeof("no_path"), 0);
+                if (bytesSent == -1)
+                {
+                    handleNetworkErrors("send");
+                }
+                continue;
+            }
+            else if (r2->isDir == 0)
+            {
+                handleFileOperationError("not_dir");
+                bytesSent = send(cli->connfd, "not_dir", sizeof("not_dir"), 0);
+                if (bytesSent == -1)
+                {
+                    handleNetworkErrors("send");
+                }
+                continue;
+            }
+
+            char *mdir = dirname(strdup(r1->path));
+
+            int resp = copyLocally(r1, mdir, r2->path, r2->orignalSS, r1->orignalSS); // error
+
+            // make copied paths accessible
+            makeAccessibleAferCopy(getRecord(r2->path));
+
+            char ackStatus[4096];
+            if (resp == 0)
+            {
+                strcpy(ackStatus, "SUCCESS");
+                printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+            }
+            else
+            {
+                strcpy(ackStatus, "ERROR");
+            }
+
+            bytesSent = send(cli->connfd, ackStatus, sizeof(ackStatus), 0);
+            if (bytesSent == -1)
+            {
+                handleNetworkErrors("send");
+            }
+            continue;
+        }
+
         else if (strcmp(request_command, "READ") == 0 || strcmp(request_command, "WRITE") == 0 || strcmp(request_command, "FILEINFO") == 0)
         {
             bool error = false;
             char *path = arg_arr[1];
             // check if record exists
+
             struct record *r = getRecord(path);
+            // if(strcmp(request_command, "WRITE") == 0) pthread_mutex_lock(&r->record_lock);
             struct ssDetails *ss;
             if (r == NULL)
             {
                 ss = malloc(sizeof(struct ssDetails));
                 ss->id = -1; // invalid record
                 handleFileOperationError("no_path");
-                error = false;
+                error = true;
             }
             else if (r->isDir == true)
             {
                 ss = malloc(sizeof(struct ssDetails));
                 ss->id = -2; // invalid record
-                handleFileOperationError("no_file");
-                error = false;
+                handleFileOperationError("not_file");
+                error = true;
             }
             else
             {
                 ss = r->orignalSS;
+            }
+            if (strcmp(request_command, "WRITE") == 0)
+            {
+                pthread_mutex_lock(&r->record_lock);
             }
             // printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
             // send ss details
@@ -379,6 +619,10 @@ void *acceptClientRequests(void *args)
             if (!error)
             {
                 printf(YELLOW_COLOR "Storage Server details sent to client\n" RESET_COLOR);
+            }
+            if (strcmp(request_command, "WRITE") == 0)
+            {
+                pthread_mutex_unlock(&r->record_lock);
             }
         }
     }
@@ -439,6 +683,8 @@ void *addPaths(void *args)
         r->nextSibling = NULL;
         r->parent = NULL;
         r->prevSibling = NULL;
+        r->isValid = true;
+        pthread_mutex_init(&(r->record_lock), NULL);
 
         addToRecords(r);
         int bytesSent = send(ss->addPathfd, "ADDED", strlen("ADDED"), 0);
