@@ -66,7 +66,7 @@ void *takeInputsDynamically(void *args)
 				int r = stat(currPath, &dirStat);
 				if (r == -1)
 				{
-					fprintf(stderr, "File error\n");
+					handleSYSErrors("stat");
 					exit(1);
 				}
 				char perms[11];
@@ -82,7 +82,7 @@ void *takeInputsDynamically(void *args)
 		}
 		else
 		{
-			printf("path does not exist\n");
+			printf(RED"Invalid path!\n");
 		}
 	}
 	return NULL;
@@ -154,7 +154,7 @@ void *serveNM_Requests(void *args)
 				perms = malloc(sizeof(char) * 1024);
 				strcpy(perms, "drwxr-xr-x");
 			}
-
+			printf("perms: %s\n", perms);
 			status = makeDirectory(path, perms);
 			switch (status)
 			{
@@ -240,7 +240,7 @@ void *serveNM_Requests(void *args)
 		}
 		else if (strcmp(request_command, "WRITEFILE") == 0)
 		{
-			status = sendFileCopy(path, nmfd); // error
+			status = sendFileCopy(path, nmfd, true); // error
 			switch (status)
 			{
 			case 0:
@@ -271,7 +271,7 @@ void *serveNM_Requests(void *args)
 				perms = malloc(sizeof(char) * 1024);
 				strcpy(perms, "-rw-r--r--");
 			}
-			status = receiveFileCopy(path, nmfd, perms); // error
+			status = receiveFileCopy(path, nmfd, perms, false); // error
 			switch (status)
 			{
 			case 0:

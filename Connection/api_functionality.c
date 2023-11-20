@@ -504,7 +504,8 @@ mode_t reversePermissions(char *perms)
 //     perms[10] = '\0'; // Null-terminate the string
 // }
 
-void convertPermissions(mode_t mode, char* str) {
+void convertPermissions(mode_t mode, char *str)
+{
     str[0] = S_ISDIR(mode) ? 'd' : '-';
     str[1] = (mode & S_IRUSR) ? 'r' : '-';
     str[2] = (mode & S_IWUSR) ? 'w' : '-';
@@ -567,7 +568,7 @@ int removeDirectory(char *path)
 }
 
 int makeDirectory(char *path, char *perms)
-{   
+{
     mode_t mode = reversePermissions(perms);
     char *baseDir = dirname(strdup(path));
     int retval = 0;
@@ -774,17 +775,6 @@ int sendFile(char *path, int sockfd)
 
 int receiveFile(char *path, int sockfd)
 {
-    // if (!check_path_exists(path))
-    // {
-    //     handleFileOperationError("file_not_found");
-    //     return -1;
-    // }
-    // if (isDirectory(path))
-    // {
-    //     handleFileOperationError("not_file");
-    //     return -2;
-    // }
-
     int fd = open(path, O_WRONLY | O_CREAT, 0644);
     if (fd == -1)
     {
@@ -798,7 +788,9 @@ int receiveFile(char *path, int sockfd)
     while (bytes_read > 0)
     {
         if (strstr(buf, "STOP"))
+        {
             break;
+        }
 
         ssize_t resp = write(fd, buf, bytes_read);
 
@@ -835,21 +827,24 @@ int receiveFile(char *path, int sockfd)
     return 0; // Success
 }
 
-
-int sendFileCopy(char *path, int sockfd)
+int sendFileCopy(char *path, int sockfd, bool finalAck)
 {
-
+    if (!check_path_exists(path))
+    {
+        handleFileOperationError("file_not_found");
+        return -1;
+    }
     if (isDirectory(path))
     {
-        printf(RED "File Requested is a directory\n" reset);
-        return -1;
+        handleFileOperationError("not_file");
+        return -2;
     }
 
     int fd = open(path, O_RDONLY);
     if (fd == -1)
     {
-        perror("open");
-        return -1;
+        handleSYSErrors("open");
+        return -3;
     }
 
     char buf[MAX_SIZE];
@@ -860,8 +855,8 @@ int sendFileCopy(char *path, int sockfd)
         ssize_t resp = send(sockfd, buf, bytes_read, 0);
         if (resp == -1)
         {
-            perror("send");
-            return -1;
+            handleNetworkErrors("send");
+            return -4;
         }
 
         // Wait for acknowledgment from the client
@@ -869,8 +864,8 @@ int sendFileCopy(char *path, int sockfd)
         ssize_t ack_resp = recv(sockfd, recACK, sizeof(recACK), 0);
         if (ack_resp == -1)
         {
-            perror("read ACK");
-            return -1;
+            handleNetworkErrors("recv");
+            return -5;
         }
 
         bzero(buf, MAX_SIZE);
@@ -879,8 +874,8 @@ int sendFileCopy(char *path, int sockfd)
 
     if (bytes_read == -1)
     {
-        perror("read");
-        return -1;
+        handleSYSErrors("read");
+        return -6;
     }
 
     close(fd);
@@ -892,21 +887,32 @@ int sendFileCopy(char *path, int sockfd)
 
     if (stop_resp == -1)
     {
-        perror("write stop");
-        return -1;
+        handleSYSErrors("write");
+        return -7;
+    }
+
+    if (finalAck)
+    {
+        // get final ack
+        ssize_t ack_resp = recv(sockfd, stopSignal, sizeof(stopSignal), 0);
+        if (ack_resp == -1)
+        {
+            handleNetworkErrors("recv");
+            return -5;
+        }
     }
 
     return 0; // Success
 }
 
-int receiveFileCopy(char *path, int sockfd, char* perms)
+int receiveFileCopy(char *path, int sockfd, char *perms, bool finalAck)
 {
-    mode_t mode= reversePermissions(perms);
+    mode_t mode = reversePermissions(perms);
     int fd = open(path, O_WRONLY | O_CREAT, mode);
     if (fd == -1)
     {
-        perror("open");
-        return -1;
+        handleSYSErrors("open");
+        return -3;
     }
 
     char buf[MAX_SIZE];
@@ -915,30 +921,53 @@ int receiveFileCopy(char *path, int sockfd, char* perms)
     while (bytes_read > 0)
     {
         if (strstr(buf, "STOP"))
+        {
             break;
+        }
 
         ssize_t resp = write(fd, buf, bytes_read);
 
         // Send acknowledgment to the server
         char sendACK[MAX_SIZE] = "ACK";
         ssize_t ack_resp = send(sockfd, sendACK, sizeof(sendACK), 0);
+        if (ack_resp == -1)
+        {
+            handleNetworkErrors("send");
+            return -4;
+        }
 
         if (resp == -1 || ack_resp == -1)
         {
-            perror("write");
-            return -1;
+            handleSYSErrors("write");
+            return -7;
         }
 
         bzero(buf, MAX_SIZE);
         bytes_read = recv(sockfd, buf, MAX_SIZE, 0);
+        if (bytes_read == -1)
+        {
+            handleNetworkErrors("recv");
+            return -5;
+        }
     }
 
     if (bytes_read == -1)
     {
-        perror("read");
-        return -1;
+        handleNetworkErrors("recv");
+        return -5;
+    }
+
+    if (finalAck)
+    {
+        // send final ack
+        ssize_t ack_resp = send(sockfd, "OVER", sizeof("OVER"), 0);
+        if (ack_resp == -1)
+        {
+            handleNetworkErrors("send");
+            return -4;
+        }
     }
 
     close(fd);
-    return 0; 
+    return 0; // Success
 }
