@@ -186,7 +186,7 @@ void makeAccessibleAferCopy(struct record *r)
     }
 }
 
-int copyLocally(struct record *curr_rec,char* main_path, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read)
+int copyLocally(struct record *curr_rec, char *main_path, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read)
 {
     if (curr_rec == NULL || curr_rec->isValid == false)
     {
@@ -228,7 +228,7 @@ int copyLocally(struct record *curr_rec,char* main_path, char *mdir, char *base_
         pthread_mutex_init(&(r->record_lock), NULL);
         addToRecords(r);
 
-        res1 = copyLocally(curr_rec->firstChild,curr_rec->path, mdir, base_dir, ss, ss_read);
+        res1 = copyLocally(curr_rec->firstChild, curr_rec->path, mdir, base_dir, ss, ss_read);
     }
     else
     {
@@ -380,6 +380,18 @@ void *acceptClientRequests(void *args)
                 }
                 continue;
             }
+            // check if ss stored in record is down or not and subsequently, send a packet to client
+            else if (!validSS[r->originalSS->id])
+            {
+                // sending ack status to client
+                handleFileOperationError("read_only");
+                bytesSent = send(cli->connfd, "read_only", sizeof("read_only"), 0);
+                if (bytesSent == -1)
+                {
+                    handleNetworkErrors("send");
+                }
+                continue;
+            }
 
             pthread_mutex_lock(&r->record_lock);
             struct ssDetails *ss = r->originalSS;
@@ -454,6 +466,18 @@ void *acceptClientRequests(void *args)
                 // sending ack status to client
                 handleFileOperationError("no_path");
                 bytesSent = send(cli->connfd, "no_path", sizeof("no_path"), 0);
+                if (bytesSent == -1)
+                {
+                    handleNetworkErrors("send");
+                }
+                continue;
+            }
+            // check if ss stored in record is down or not and subsequently, send a packet to client
+            else if (!validSS[r->originalSS->id])
+            {
+                // sending ack status to client
+                handleFileOperationError("read_only");
+                bytesSent = send(cli->connfd, "read_only", sizeof("read_only"), 0);
                 if (bytesSent == -1)
                 {
                     handleNetworkErrors("send");
@@ -589,13 +613,16 @@ void *acceptClientRequests(void *args)
             // check if record exists
 
             struct record *r = getRecord(path);
-            // if(strcmp(request_command, "WRITE") == 0) pthread_mutex_lock(&r->record_lock);
+            if (strcmp(arg_arr[0], "WRITE") == 0)
+                pthread_mutex_lock(&r->record_lock);
             struct ssDetails *ss;
             if (r == NULL)
             {
                 ss = malloc(sizeof(struct ssDetails));
                 ss->id = -1; // invalid record
                 handleFileOperationError("no_path");
+                if (strcmp(arg_arr[0], "WRITE") == 0)
+                    pthread_mutex_unlock(&r->record_lock);
                 error = true;
             }
             else if (r->isDir == true)
@@ -603,15 +630,13 @@ void *acceptClientRequests(void *args)
                 ss = malloc(sizeof(struct ssDetails));
                 ss->id = -2; // invalid record
                 handleFileOperationError("not_file");
+                if (strcmp(arg_arr[0], "WRITE") == 0)
+                    pthread_mutex_unlock(&r->record_lock);
                 error = true;
             }
             else
             {
                 ss = r->originalSS;
-            }
-            if (strcmp(request_command, "WRITE") == 0)
-            {
-                pthread_mutex_lock(&r->record_lock);
             }
             // printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
             // send ss details
@@ -619,14 +644,28 @@ void *acceptClientRequests(void *args)
             if (bytesSent == -1)
             {
                 handleNetworkErrors("send");
+                if (strcmp(arg_arr[0], "WRITE") == 0)
+                    pthread_mutex_unlock(&r->record_lock);
             }
             if (!error)
             {
                 printf(YELLOW_COLOR "Storage Server details sent to client\n" RESET_COLOR);
             }
-            if (strcmp(request_command, "WRITE") == 0)
+            // // add code for acknowledgment from the client
+            if (strcmp(arg_arr[0], "WRITE") == 0)
             {
-                pthread_mutex_unlock(&r->record_lock);
+                char ackBUFFER[10];
+                bytesRecv = recv(cli->connfd, ackBUFFER, sizeof(ackBUFFER), 0);
+                if (bytesRecv == -1)
+                {
+                    handleNetworkErrors("recv");
+                    pthread_mutex_unlock(&r->record_lock);
+                    // break;
+                }
+                if (strcmp(ackBUFFER, "done") == 0)
+                {
+                    pthread_mutex_unlock(&r->record_lock);
+                }
             }
         }
     }
