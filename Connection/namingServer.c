@@ -665,6 +665,5 @@ int main(int argc, char *argv[])
     // accpeting server and clinet are infine loops and continue till naming server terminated
     pthread_join(acceptHostThread, NULL);
 
-    freeCache(myCache);
     return 0;
 }
