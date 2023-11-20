@@ -154,7 +154,7 @@ void *serveNM_Requests(void *args)
 				perms = malloc(sizeof(char) * 1024);
 				strcpy(perms, "drwxr-xr-x");
 			}
-			printf("perms: %s\n", perms);
+			// printf("perms: %s\n", perms);
 			status = makeDirectory(path, perms);
 			switch (status)
 			{
@@ -643,6 +643,10 @@ int initializeNMConnectionForRecords(char *ip, int port)
 		handleNetworkErrors("connect");
 		exit(0);
 	}
+	mkdir("backups", 0755);
+	struct stat dirStat;
+	int r = stat("backups", &dirStat);
+	sendPathToNS("backups", "drwxr-xr-x", 0, sockfd, dirStat.st_mtime, dirStat.st_atime);
 
 	return sockfd;
 }

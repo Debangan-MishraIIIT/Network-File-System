@@ -23,6 +23,10 @@ pthread_mutex_t loggingLock;
 
 int nmSock;
 
+void addToRecords(struct record *r);
+int copyLocally(struct record *curr_rec, char *main_path, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read);
+int backupRemove(struct record *curr_rec, struct ssDetails *ss);
+
 struct record *getRecord(char *path)
 {
     pthread_mutex_lock(&recordsLock);
@@ -61,6 +65,12 @@ void addToRecords(struct record *r)
     }
 
     char *finalPath = strdup(r->path);
+    if (strlen(finalPath) >= 7 && strncmp(finalPath, "backups", 7) == 0)
+    {
+        pthread_mutex_unlock(&recordsLock);
+        return;
+    }
+
     char *token = strtok(finalPath, "/");
     struct record *parentNode = root;
 
@@ -108,14 +118,28 @@ void addToRecords(struct record *r)
     }
     insertRecordToTrie(trieRoot, r);
     printf(BLUE_COLOR "Added %s as accessible path in Storage Server %d\nPermissions: %s\n" RESET_COLOR, r->path, r->originalSS->id, r->originalPerms);
-
     pthread_mutex_unlock(&recordsLock);
+
+    // copy to backups
+    char backupPath[4096];
+    bzero(backupPath, 4096);
+    strcpy(backupPath, "backups/");
+    strcat(backupPath, dirname(strdup(r->path)));
+    if (r->originalSS->backup1 != NULL)
+    {
+        copyLocally(r, r->path, dirname(strdup(r->path)), backupPath, r->originalSS->backup1, r->originalSS);
+    }
+    if (r->originalSS->backup1 != NULL)
+    {
+        copyLocally(r, r->path, dirname(strdup(r->path)), backupPath, r->originalSS->backup2, r->originalSS);
+    }
     return;
 }
 
 void removeFromRecords(char *path)
 {
     struct record *r = getRecord(path);
+    backupRemove(r, r->originalSS);
     pthread_mutex_lock(&recordsLock);
     removeFileFromCache(myCache, path);
     deleteTrieNode(trieRoot, path);
@@ -186,7 +210,7 @@ void makeAccessibleAferCopy(struct record *r)
     }
 }
 
-int copyLocally(struct record *curr_rec,char* main_path, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read)
+int copyLocally(struct record *curr_rec, char *main_path, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read)
 {
     if (curr_rec == NULL || curr_rec->isValid == false)
     {
@@ -228,7 +252,7 @@ int copyLocally(struct record *curr_rec,char* main_path, char *mdir, char *base_
         pthread_mutex_init(&(r->record_lock), NULL);
         addToRecords(r);
 
-        res1 = copyLocally(curr_rec->firstChild,curr_rec->path, mdir, base_dir, ss, ss_read);
+        res1 = copyLocally(curr_rec->firstChild, curr_rec->path, mdir, base_dir, ss, ss_read);
     }
     else
     {
@@ -315,6 +339,39 @@ int copyLocally(struct record *curr_rec,char* main_path, char *mdir, char *base_
     else
     {
         return -1; // error
+    }
+}
+
+int backupRemove(struct record *curr_rec, struct ssDetails *ss)
+{
+    if (curr_rec == NULL || curr_rec->isValid == false)
+    {
+        return 0;
+    }
+    char new_request[4096];
+    bzero(new_request, sizeof(new_request));
+    int bytesRecv;
+    char ackStatus[4096];
+
+    if (curr_rec->isDir)
+    {
+        strcat(new_request, "RMDIR ");
+        strcat(new_request, "backups/");
+        strcat(new_request, curr_rec->path);
+        send(ss->backup1->connfd, new_request, sizeof(new_request), 0);
+        recv(ss->backup1->connfd, ackStatus, sizeof(ackStatus), 0);
+        send(ss->backup2->connfd, new_request, sizeof(new_request), 0);
+        recv(ss->backup2->connfd, ackStatus, sizeof(ackStatus), 0);
+    }
+    else
+    {
+        strcat(new_request, "RMFILE ");
+        strcat(new_request, "backups/");
+        strcat(new_request, curr_rec->path);
+        send(ss->backup1->connfd, new_request, sizeof(new_request), 0);
+        recv(ss->backup1->connfd, ackStatus, sizeof(ackStatus), 0);
+        send(ss->backup2->connfd, new_request, sizeof(new_request), 0);
+        recv(ss->backup2->connfd, ackStatus, sizeof(ackStatus), 0);
     }
 }
 
@@ -545,6 +602,17 @@ void *acceptClientRequests(void *args)
                 }
                 continue;
             }
+            if (!validSS[r1->originalSS->id] || !validSS[r2->originalSS->id])
+            {
+                // sending ack status to client
+                handleFileOperationError("read_only");
+                bytesSent = send(cli->connfd, "read_only", sizeof("read_only"), 0);
+                if (bytesSent == -1)
+                {
+                    handleNetworkErrors("send");
+                }
+                continue;
+            }
             else if (r2->isDir == 0)
             {
                 handleFileOperationError("not_dir");
@@ -687,9 +755,15 @@ void *addPaths(void *args)
         r->parent = NULL;
         r->prevSibling = NULL;
         r->isValid = true;
+        if (strcmp(det.path, "backups") == 0)
+        {
+            r->isValid = false;
+        }
+
         pthread_mutex_init(&(r->record_lock), NULL);
 
         addToRecords(r);
+
         int bytesSent = send(ss->addPathfd, "ADDED", strlen("ADDED"), 0);
         if (bytesSent == -1)
         {
@@ -717,6 +791,19 @@ void addClient(int connfd, char *hostIP, int hostPort)
     printf(YELLOW_COLOR "[+] Client %d Joined\n" RESET_COLOR, clientDetails[clientCount].id);
 
     pthread_create(&clientThreads[clientCount], NULL, acceptClientRequests, &clientDetails[clientCount]);
+}
+
+void createBackup(struct ssDetails *src, struct ssDetails *dest)
+{
+    struct record *child = root->firstChild;
+    while (child != NULL)
+    {
+        if (child->originalSS == src && child->isValid)
+        {
+            copyLocally(child, child->path, dirname(strdup(child->path)), "backups", dest, src);
+        }
+        child = child->nextSibling;
+    }
 }
 
 void addStorageServer(int connfd, char *hostIP, int hostPort)
@@ -777,7 +864,13 @@ void addStorageServer(int connfd, char *hostIP, int hostPort)
         storageServers[i].backup2 = NULL;
         printf(YELLOW_COLOR "[+] Storage Server %d Joined from %s:%d\n    Port for Client Communication: %d\n" RESET_COLOR, storageServers[storageServerCount].id, storageServers[storageServerCount].ip, storageServers[storageServerCount].nmPort, storageServers[storageServerCount].cliPort);
         activeStorageServers++;
+    }
 
+    pthread_t addpathThread;
+    pthread_create(&addpathThread, NULL, addPaths, (void *)&storageServers[i]);
+
+    if (!reconnect)
+    {
         // add backup ss
         if (activeStorageServers >= 3)
         {
@@ -801,11 +894,13 @@ void addStorageServer(int connfd, char *hostIP, int hostPort)
                         {
                             b1 = j;
                             storageServers[i].backup1 = &storageServers[b1];
+                            createBackup(&storageServers[i], &storageServers[b1]);
                         }
                         else if (storageServers[i].backup2 == NULL)
                         {
                             b2 = j;
                             storageServers[i].backup2 = &storageServers[b2];
+                            createBackup(&storageServers[i], &storageServers[b2]);
                         }
                         else
                         {
@@ -817,9 +912,6 @@ void addStorageServer(int connfd, char *hostIP, int hostPort)
             }
         }
     }
-
-    pthread_t addpathThread;
-    pthread_create(&addpathThread, NULL, addPaths, (void *)&storageServers[i]);
 }
 
 void *acceptHost(void *args)
