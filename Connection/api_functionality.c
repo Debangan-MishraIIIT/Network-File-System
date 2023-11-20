@@ -425,6 +425,11 @@ int handle_naming_server_commands(char *command, char *inputS, int nmfd)
 
 void parse_input(char *array[], char *inputS)
 {
+    for (int i = 0; i < 3; i++)
+    {
+        array[i] = NULL;
+    }
+    
     char *inputString = strdup(inputS);
     char *token = strtok(inputString, " \t\n");
     int count = 0;

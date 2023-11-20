@@ -7,7 +7,6 @@ typedef struct TrieNode
 {
     struct record *tableEntry;
     struct TrieNode *children[NUM_CHILDREN]; // trie node array
-    bool isSpecial;
 } TrieNode;
 
 TrieNode *initTrieNode();

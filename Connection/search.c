@@ -10,7 +10,6 @@ TrieNode *initTrieNode()
             newNode->children[i] = NULL;
         }
         newNode->tableEntry = NULL;
-        // newNode->isSpecial = false;
     }
     return newNode;
 }
@@ -30,7 +29,6 @@ void insertRecordToTrie(TrieNode *root, struct record *newTableEntry)
     // temp->rec = strdup(ip); // copy the ip and port into the struct
     // temp->port = port;
     temp->tableEntry = newTableEntry;
-    // temp->isSpecial = true;
 }
 
 // can modify the search algo accordingly to return appropriate values.
@@ -51,7 +49,7 @@ struct record *search(TrieNode *root, char *file_path)
     }
     if (temp->tableEntry)
     {
-        // printf("File is located at %s in SS where IP: %s, Port: %d\n", temp->tableEntry->path, temp->tableEntry->originalSS->ip, temp->tableEntry->originalSS->cliPort);
+        // printf("File is located at %s in SS where IP: %s, Port: %d\n", temp->tableEntry->path, temp->tableEntry->orignalSS->ip, temp->tableEntry->orignalSS->cliPort);
         return temp->tableEntry;
     }
     else
@@ -84,7 +82,8 @@ int deleteTrieNode(TrieNode *root, char *file_path)
     //     temp->tableEntry = NULL;
     // }
 
+    // Remove the TrieNode from its parent
     free(prev->children[(int)file_path[i - 1]]);
     prev->children[(int)file_path[i - 1]] = NULL;
-    return 0;
+    return 1;
 }
