@@ -186,7 +186,7 @@ void makeAccessibleAferCopy(struct record *r)
     }
 }
 
-int copyLocally(struct record *curr_rec, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read)
+int copyLocally(struct record *curr_rec, char* main_path, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read)
 {
     if (curr_rec == NULL || curr_rec->isValid == false)
     {
@@ -228,7 +228,7 @@ int copyLocally(struct record *curr_rec, char *mdir, char *base_dir, struct ssDe
         pthread_mutex_init(&(r->record_lock), NULL);
         addToRecords(r);
 
-        res1 = copyLocally(curr_rec->firstChild, mdir, base_dir, ss, ss_read);
+        res1 = copyLocally(curr_rec->firstChild, main_path, mdir, base_dir, ss, ss_read);
     }
     else
     {
@@ -305,7 +305,10 @@ int copyLocally(struct record *curr_rec, char *mdir, char *base_dir, struct ssDe
 
         remove(recvFileName);
     }
-    int res2 = copyLocally(curr_rec->nextSibling, mdir, base_dir, ss, ss_read);
+    int res2 = 0;
+    
+    if(strcmp(main_path, curr_rec->path)!=0)
+        copyLocally(curr_rec->nextSibling, main_path, mdir, base_dir, ss, ss_read);
     if (res1 == 0 && res2 == 0 && res3 > 0)
     {
         return 0;
@@ -556,7 +559,7 @@ void *acceptClientRequests(void *args)
 
             char *mdir = dirname(strdup(r1->path));
 
-            int resp = copyLocally(r1, mdir, r2->path, r2->originalSS, r1->originalSS); // error
+            int resp = copyLocally(r1, r1->path, mdir, r2->path, r2->originalSS, r1->originalSS); // error
 
             // make copied paths accessible
             makeAccessibleAferCopy(getRecord(r2->path));
