@@ -82,7 +82,7 @@ void *takeInputsDynamically(void *args)
 		}
 		else
 		{
-			printf(RED"Invalid path!\n");
+			printf(RED"Invalid path!\n"RESET_COLOR);
 		}
 	}
 	return NULL;

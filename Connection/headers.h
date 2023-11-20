@@ -62,6 +62,8 @@ struct ssDetails
     int cliPort;
     int connfd;
     int addPathfd;
+    struct ssDetails *backup1;
+    struct ssDetails *backup2;
 };
 
 struct accessibleFile
@@ -73,12 +75,12 @@ struct accessibleFile
 struct record
 {
     char *path;
-    struct ssDetails *orignalSS;
+    struct ssDetails *originalSS;
     char originalPerms[11];
     bool isDir;
     char currentPerms[11]; // for backup
-    struct ssDetails *backupSS1;
-    struct ssDetails *backupSS2;
+    // struct ssDetails *backupSS1;
+    // struct ssDetails *backupSS2;
     size_t size;
 
     // for n-ary tree
@@ -86,7 +88,7 @@ struct record
     struct record *nextSibling;
     struct record *parent;
     struct record *prevSibling;
-    pthread_mutex_t record_lock; 
+    pthread_mutex_t record_lock;
 
     bool isValid; // only used in copy to prevent recursive dir copying
 };

@@ -70,7 +70,10 @@ void handleFileOperationError(char *error)
         printf(RED "ERROR 510: COULD NOT SEND FILE (send_file)\n" reset);
 
     if (!strcmp(error, "dir_not_empty"))
-        printf(RED "ERROR 510: DIRECTORY IS NOT EMPTY (check_empty)\n" reset);
+        printf(RED "ERROR 511: DIRECTORY IS NOT EMPTY (check_empty)\n" reset);
+    
+    if (!strcmp(error, "read_only"))
+        printf(RED "ERROR 512: PATH IS READ ONLY (read_only)\n" reset);
 }
 
 // syscall and input errors (all in blue)

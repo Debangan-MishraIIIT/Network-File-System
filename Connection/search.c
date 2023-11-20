@@ -51,7 +51,7 @@ struct record *search(TrieNode *root, char *file_path)
     }
     if (temp->tableEntry && temp->isSpecial)
     {
-        // printf("File is located at %s in SS where IP: %s, Port: %d\n", temp->tableEntry->path, temp->tableEntry->orignalSS->ip, temp->tableEntry->orignalSS->cliPort);
+        // printf("File is located at %s in SS where IP: %s, Port: %d\n", temp->tableEntry->path, temp->tableEntry->originalSS->ip, temp->tableEntry->originalSS->cliPort);
         return temp->tableEntry;
     }
     else

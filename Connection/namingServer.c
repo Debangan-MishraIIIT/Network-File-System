@@ -3,6 +3,7 @@
 struct ssDetails storageServers[10000];
 bool validSS[10000];
 int storageServerCount = 0;
+int activeStorageServers = 0;
 
 struct cDetails clientDetails[10000];
 bool validCli[10000];
@@ -29,14 +30,14 @@ struct record *getRecord(char *path)
     // first check if path exists in cache or not
     tableEntry = searchFileInCache(myCache, path);
     // printCache(myCache);
-    if (tableEntry && validSS[tableEntry->orignalSS->id])
+    if (tableEntry)
     {
         pthread_mutex_unlock(&recordsLock);
         return tableEntry;
     }
 
     tableEntry = search(trieRoot, path);
-    if (tableEntry && validSS[tableEntry->orignalSS->id])
+    if (tableEntry)
     {
         // add the record to cache since it was not present before
         addFile(myCache, tableEntry);
@@ -106,7 +107,7 @@ void addToRecords(struct record *r)
         token = strtok(NULL, "/");
     }
     insertRecordToTrie(trieRoot, r);
-    printf(BLUE_COLOR "Added %s as accessible path in Storage Server %d\nPermissions: %s\n" RESET_COLOR, r->path, r->orignalSS->id, r->originalPerms);
+    printf(BLUE_COLOR "Added %s as accessible path in Storage Server %d\nPermissions: %s\n" RESET_COLOR, r->path, r->originalSS->id, r->originalPerms);
 
     pthread_mutex_unlock(&recordsLock);
     return;
@@ -172,6 +173,7 @@ void makeAccessibleAferCopy(struct record *r)
     {
         return;
     }
+    r->isValid = true;
     struct record *child = r->firstChild;
     while (child != NULL)
     {
@@ -179,6 +181,7 @@ void makeAccessibleAferCopy(struct record *r)
         {
             makeAccessibleAferCopy(child);
         }
+        child->isValid = true;
         child = child->nextSibling;
     }
 }
@@ -212,7 +215,7 @@ int copyLocally(struct record *curr_rec, char *mdir, char *base_dir, struct ssDe
         struct record *r = malloc(sizeof(struct record));
         r->path = malloc(sizeof(char) * 4096);
         strcpy(r->path, arg_arr[1]);
-        r->orignalSS = ss;
+        r->originalSS = ss;
         strcpy(r->originalPerms, arg_arr[2]);
         r->isDir = true;
         strcpy(r->currentPerms, arg_arr[2]);
@@ -243,7 +246,7 @@ int copyLocally(struct record *curr_rec, char *mdir, char *base_dir, struct ssDe
         struct record *r = malloc(sizeof(struct record));
         r->path = malloc(sizeof(char) * 4096);
         strcpy(r->path, arg_arr[1]);
-        r->orignalSS = ss;
+        r->originalSS = ss;
         strcpy(r->originalPerms, arg_arr[2]);
         r->isDir = false;
         strcpy(r->currentPerms, arg_arr[2]);
@@ -377,7 +380,8 @@ void *acceptClientRequests(void *args)
             }
 
             pthread_mutex_lock(&r->record_lock);
-            struct ssDetails *ss = r->orignalSS;
+            struct ssDetails *ss = r->originalSS;
+
             // sending to ss
             bytesSent = send(ss->connfd, request, sizeof(request), 0);
             if (bytesSent == -1)
@@ -456,7 +460,7 @@ void *acceptClientRequests(void *args)
             }
 
             pthread_mutex_lock(&r->record_lock);
-            struct ssDetails *ss = r->orignalSS;
+            struct ssDetails *ss = r->originalSS;
 
             // sending to ss
             bytesSent = send(ss->connfd, request, sizeof(request), 0);
@@ -485,7 +489,7 @@ void *acceptClientRequests(void *args)
 
                 r->path = malloc(sizeof(char) * 4096);
                 strcpy(r->path, arg_arr[1]);
-                r->orignalSS = ss;
+                r->originalSS = ss;
                 if (strcmp(request_command, "MKDIR") == 0)
                 {
                     strcpy(r->originalPerms, "drwxr-xr-x");
@@ -498,10 +502,8 @@ void *acceptClientRequests(void *args)
                     r->isDir = false;
                     strcpy(r->currentPerms, "-rw-r--r--");
                 }
-                r->backupSS1 = NULL;
-                r->backupSS2 = NULL;
                 r->size = 0;
-                
+
                 r->firstChild = NULL;
                 r->nextSibling = NULL;
                 r->parent = NULL;
@@ -554,7 +556,7 @@ void *acceptClientRequests(void *args)
 
             char *mdir = dirname(strdup(r1->path));
 
-            int resp = copyLocally(r1, mdir, r2->path, r2->orignalSS, r1->orignalSS); // error
+            int resp = copyLocally(r1, mdir, r2->path, r2->originalSS, r1->originalSS); // error
 
             // make copied paths accessible
             makeAccessibleAferCopy(getRecord(r2->path));
@@ -603,7 +605,7 @@ void *acceptClientRequests(void *args)
             }
             else
             {
-                ss = r->orignalSS;
+                ss = r->originalSS;
             }
             if (strcmp(request_command, "WRITE") == 0)
             {
@@ -648,6 +650,7 @@ void *addPaths(void *args)
             validSS[ss->id] = false;
             close(ss->connfd);
             close(ss->addPathfd);
+            activeStorageServers--;
             printf(RED_COLOR "[-] Storage Server %d has disconnected!\n" RESET_COLOR, ss->id);
             break;
         }
@@ -671,12 +674,10 @@ void *addPaths(void *args)
 
         r->path = malloc(sizeof(char) * 4096);
         strcpy(r->path, det.path);
-        r->orignalSS = ss;
+        r->originalSS = ss;
         strcpy(r->originalPerms, det.perms);
         r->isDir = det.isDir;
         strcpy(r->currentPerms, det.perms);
-        r->backupSS1 = NULL;
-        r->backupSS2 = NULL;
         r->size = det.size;
 
         r->firstChild = NULL;
@@ -765,12 +766,54 @@ void addStorageServer(int connfd, char *hostIP, int hostPort)
         validSS[storageServerCount] = true;
         printf(YELLOW_COLOR "[+] Storage Server %d Reconnected from %s:%d\n    Port for Client Communication: %d\n" RESET_COLOR, storageServers[i].id, storageServers[i].ip, storageServers[i].nmPort, storageServers[i].cliPort);
         storageServerCount--;
+        activeStorageServers++;
     }
     else
     {
         i = storageServerCount;
-
+        storageServers[i].backup1 = NULL;
+        storageServers[i].backup2 = NULL;
         printf(YELLOW_COLOR "[+] Storage Server %d Joined from %s:%d\n    Port for Client Communication: %d\n" RESET_COLOR, storageServers[storageServerCount].id, storageServers[storageServerCount].ip, storageServers[storageServerCount].nmPort, storageServers[storageServerCount].cliPort);
+        activeStorageServers++;
+
+        // add backup ss
+        if (activeStorageServers >= 3)
+        {
+            for (int i = 1; i <= storageServerCount; i++)
+            {
+                if (storageServers[i].backup1 != NULL && storageServers[i].backup2 != NULL)
+                {
+                    continue;
+                }
+
+                int b1 = 0, b2 = 0;
+                for (int j = i - 1; j != i; j--)
+                {
+                    if (j == 0)
+                    {
+                        j = storageServerCount;
+                    }
+                    if (validSS[j])
+                    {
+                        if (storageServers[i].backup1 == NULL)
+                        {
+                            b1 = j;
+                            storageServers[i].backup1 = &storageServers[b1];
+                        }
+                        else if (storageServers[i].backup2 == NULL)
+                        {
+                            b2 = j;
+                            storageServers[i].backup2 = &storageServers[b2];
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                }
+                printf(BLUE_COLOR "Backup servers for SS%d are SS%d and SS%d\n" RESET_COLOR, i, b1, b2);
+            }
+        }
     }
 
     pthread_t addpathThread;
