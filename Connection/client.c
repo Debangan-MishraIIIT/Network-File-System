@@ -177,7 +177,31 @@ int sendRequest(char *input, int sockfd)
 		}
 		else if (ss.id == -2)
 		{
-			handleFileOperationError("no_file");
+			handleFileOperationError("not_file");
+			char ackBUFFER[10];
+			strcpy(ackBUFFER, "done");
+			int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
+			if (bSent == -1)
+			{
+				handleNetworkErrors("send");
+			}
+			return -2;
+		}
+		else if (ss.id == -3)
+		{
+			handleFileOperationError("read_only");
+			char ackBUFFER[10];
+			strcpy(ackBUFFER, "done");
+			int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
+			if (bSent == -1)
+			{
+				handleNetworkErrors("send");
+			}
+			return -2;
+		}
+		else if (ss.id == -4)
+		{
+			handleFileOperationError("no_backups");
 			char ackBUFFER[10];
 			strcpy(ackBUFFER, "done");
 			int bSent = send(sockfd, ackBUFFER, strlen(ackBUFFER), 0);
@@ -395,13 +419,31 @@ int sendRequest(char *input, int sockfd)
 			handleFileOperationError("not_file");
 			return -2;
 		}
+		else if (ss.id == -3)
+		{
+			handleFileOperationError("read_only");
+			return -2;
+		}
+		else if (ss.id == -4)
+		{
+			handleFileOperationError("no_backups");
+			return -2;
+		}
 
 		// printf("Recieved from NM - SS %s:%d\n", ss.ip, ss.cliPort);
 		int connfd = joinSS(ss);
 
-		// send same request to ss
 		char ssRequest[1000];
-		strcpy(ssRequest, input);
+		bzero(ssRequest, sizeof(ssRequest));
+		if (ss.inBackup)
+		{
+			strcpy(ssRequest, "READ backups/");
+			strcat(ssRequest, arg_arr[1]);
+		}
+		else
+			// send same request to ss
+			strcpy(ssRequest, input);
+
 		bytesSent = send(connfd, ssRequest, sizeof(ssRequest), 0);
 		if (bytesSent == -1)
 		{
@@ -535,12 +577,30 @@ int sendRequest(char *input, int sockfd)
 			handleFileOperationError("not_file");
 			return -2;
 		}
+		else if (ss.id == -3)
+		{
+			handleFileOperationError("read_only");
+			return -2;
+		}
+		else if (ss.id == -4)
+		{
+			handleFileOperationError("no_backups");
+			return -2;
+		}
 
 		int connfd = joinSS(ss);
 
-		// send same request to ss
 		char ssRequest[1000];
-		strcpy(ssRequest, input);
+		bzero(ssRequest, sizeof(ssRequest));
+		if (ss.inBackup)
+		{
+			strcpy(ssRequest, "FILEINFO backups/");
+			strcat(ssRequest, arg_arr[1]);
+		}
+		else
+			// send same request to ss
+			strcpy(ssRequest, input);
+
 		bytesSent = send(connfd, ssRequest, sizeof(ssRequest), 0);
 		if (bytesSent == -1)
 		{

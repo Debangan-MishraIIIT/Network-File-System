@@ -681,16 +681,12 @@ void *acceptClientRequests(void *args)
             // check if record exists
 
             struct record *r = getRecord(path);
-            if (strcmp(arg_arr[0], "WRITE") == 0)
-                pthread_mutex_lock(&r->record_lock);
             struct ssDetails *ss;
             if (r == NULL)
             {
                 ss = malloc(sizeof(struct ssDetails));
                 ss->id = -1; // invalid record
                 handleFileOperationError("no_path");
-                if (strcmp(arg_arr[0], "WRITE") == 0)
-                    pthread_mutex_unlock(&r->record_lock);
                 error = true;
             }
             else if (r->isDir == true)
@@ -698,21 +694,54 @@ void *acceptClientRequests(void *args)
                 ss = malloc(sizeof(struct ssDetails));
                 ss->id = -2; // invalid record
                 handleFileOperationError("not_file");
-                if (strcmp(arg_arr[0], "WRITE") == 0)
-                    pthread_mutex_unlock(&r->record_lock);
                 error = true;
             }
             else
             {
                 ss = r->originalSS;
+                if (!validSS[ss->id])
+                {
+                    if (!strcmp(arg_arr[0], "WRITE"))
+                    {
+                        ss = malloc(sizeof(struct ssDetails));
+                        ss->id = -3; // invalid record
+                        handleFileOperationError("read_only");
+                        error = true;
+                    }
+                    else
+                    {
+                        if (ss->backup1 != NULL)
+                        {
+                            ss = ss->backup1;
+                        }
+                        else
+                        {
+                            ss = ss->backup2;
+                        }
+                    }
+                }
+                if (ss == NULL)
+                {
+                    ss = malloc(sizeof(struct ssDetails));
+                    ss->id = -4; // invalid record
+                    handleFileOperationError("no_backups");
+                    error = true;
+                }
+            }
+            if (ss != NULL && ss != r->originalSS)
+            {
+                ss->inBackup = true;
             }
             // printf("SS Details: %s:%d\n", ss->ip, ss->cliPort);
             // send ss details
+            if (strcmp(arg_arr[0], "WRITE") == 0 && !error)
+                pthread_mutex_lock(&r->record_lock);
             int bytesSent = send(cli->connfd, ss, sizeof(struct ssDetails), 0);
+            ss->inBackup = false;
             if (bytesSent == -1)
             {
                 handleNetworkErrors("send");
-                if (strcmp(arg_arr[0], "WRITE") == 0)
+                if (strcmp(arg_arr[0], "WRITE") == 0 && !error)
                     pthread_mutex_unlock(&r->record_lock);
             }
             if (!error)
@@ -727,13 +756,22 @@ void *acceptClientRequests(void *args)
                 if (bytesRecv == -1)
                 {
                     handleNetworkErrors("recv");
-                    pthread_mutex_unlock(&r->record_lock);
+                    if (!error)
+                        pthread_mutex_unlock(&r->record_lock);
                     // break;
                 }
                 if (strcmp(ackBUFFER, "done") == 0)
                 {
-                    pthread_mutex_unlock(&r->record_lock);
+                    if (!error)
+                        pthread_mutex_unlock(&r->record_lock);
                 }
+                char backupPath[4096];
+                strcpy(backupPath, "backups/");
+                strcat(backupPath, dirname(strdup(r->path)));
+                if (r->originalSS->backup1 != NULL)
+                    copyLocally(r, r->path, dirname(strdup(r->path)), backupPath, r->originalSS->backup1, r->originalSS);
+                if (r->originalSS->backup2 != NULL)
+                    copyLocally(r, r->path, dirname(strdup(r->path)), backupPath, r->originalSS->backup2, r->originalSS);
             }
         }
     }
@@ -858,6 +896,7 @@ void addStorageServer(int connfd, char *hostIP, int hostPort)
     }
     storageServers[storageServerCount].connfd = connfd;
     storageServers[storageServerCount].id = storageServerCount;
+    storageServers[storageServerCount].inBackup = false;
     validSS[storageServerCount] = true;
     logMessage("Recieved Storage Server Details", hostIP, hostPort);
 

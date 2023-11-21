@@ -71,9 +71,12 @@ void handleFileOperationError(char *error)
 
     if (!strcmp(error, "dir_not_empty"))
         printf(RED "ERROR 511: DIRECTORY IS NOT EMPTY (check_empty)\n" reset);
-    
+
     if (!strcmp(error, "read_only"))
         printf(RED "ERROR 512: PATH IS READ ONLY (read_only)\n" reset);
+
+    if (!strcmp(error, "no_backups"))
+        printf(RED "ERROR 513: STORAGE SERVERS ARE DOWN (no_backups)\n" reset);
 }
 
 // syscall and input errors (all in blue)

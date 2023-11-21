@@ -62,6 +62,7 @@ struct ssDetails
     int cliPort;
     int connfd;
     int addPathfd;
+    bool inBackup;
     struct ssDetails *backup1;
     struct ssDetails *backup2;
 };
