@@ -682,6 +682,28 @@ int sendRequest(char *input, int sockfd)
 		printf("File last access time: %s\n" CYAN_COLOR, ctime(&det.lastAccessTime));
 		return 0;
 	}
+	else if (strcmp(request_command, "HELP") == 0)
+	{
+		// using this to center text
+		struct winsize w;
+		ioctl(0, TIOCGWINSZ, &w);
+		int columns = w.ws_col;
+		int rows = w.ws_row;
+		char *string = "USER COMMANDS";
+		int stringLength = strlen(string) / 2;
+
+		printf(ORANGE_COLOR "%*s\n\n", columns / 2 + stringLength, string);
+		printf("1. READ <pathToFile> ====> Read a file \n");
+		printf("2. WRITE <pathToFile> ====> Write to a file \n");
+		printf("3. FILEINFO <pathToFile> ====> Get file information \n");
+		printf("4. MKDIR <pathToDirectory> ====> Make a directory \n");
+		printf("5. MKFILE <pathToFile> ====> Make a file \n");
+		printf("6. RMDIR <pathToDirectory> ====> Remove a directory \n");
+		printf("7. RMFILE <pathToFile> ====> Remove a file \n");
+		printf("8. COPY <sourcePath> <destinationPathToDirectory> ====> Copy a directory or a file to another directory \n");
+		printf("9. HELP ====> Print list of commands\n" reset);
+		return 0;
+	}
 
 	else
 	{
@@ -779,6 +801,18 @@ int main(int argc, char *argv[])
 	pthread_t disconnectionThread;
 	pthread_create(&disconnectionThread, NULL, isNMConnected, &sockfd);
 
+	// using this to center text
+	struct winsize w;
+	ioctl(0, TIOCGWINSZ, &w);
+	int columns = w.ws_col;
+	int rows = w.ws_row;
+	char *string = "WELCOME TO NFS!";
+	int stringLength = strlen(string) / 2;
+	char *string2 = "Type 'HELP' to list all commands and their use";
+	int stringLength2 = strlen(string2) / 2;
+	printf("\n");
+	printf(BBLU "%*s\n" reset, columns / 2 + stringLength, string);
+	printf("%*s\n\n", columns / 2 + stringLength2, string2);
 	while (1)
 	{
 		// char input[4096];
