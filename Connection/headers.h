@@ -21,6 +21,7 @@
 #include <sys/wait.h>
 #include <libgen.h>
 #include <time.h>
+#include <sys/ioctl.h>
 
 #include "socket.h"
 #include "api.h"
