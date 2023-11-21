@@ -77,6 +77,9 @@ void handleFileOperationError(char *error)
 
     if (!strcmp(error, "no_backups"))
         printf(RED "ERROR 513: STORAGE SERVERS ARE DOWN (no_backups)\n" reset);
+    
+    if (!strcmp(error, "copy_failed"))
+        printf(RED "ERROR 514: COULD NOT COPY (copy)\n" reset);
 }
 
 // syscall and input errors (all in blue)

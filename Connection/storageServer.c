@@ -25,7 +25,7 @@ void sendPathToNS(char *path, char perms[11], size_t size, int nmSock, time_t la
 	{
 		handleNetworkErrors("recv");
 	}
-	if (strcmp(status, "ADDED") == 0)
+	if (strcmp(status, "ADDED") == 0 && strcmp(path, "backups") != 0)
 	{
 		printf(BLUE_COLOR "Added %s as an accessible path\n" RESET_COLOR, path);
 	}
@@ -82,18 +82,86 @@ void *takeInputsDynamically(void *args)
 		}
 		else
 		{
-			printf(RED"Invalid path!\n"RESET_COLOR);
+			printf(RED "Invalid path!\n" RESET_COLOR);
 		}
 	}
+	return NULL;
+}
+
+void *handleBackupCommand(void *args)
+{
+	char *input = args;
+	char *request_command = strtok(input, " \t\n");
+	char *path = strtok(NULL, " \t\n");
+
+	int status = -1;
+	char statusMsg[4096];
+	bzero(statusMsg, sizeof(statusMsg));
+
+	if (strcmp(request_command, "BACKUP_MKFILE") == 0)
+	{
+		char *perms = strtok(NULL, " \t\n");
+		if (perms == NULL)
+		{
+			perms = malloc(sizeof(char) * 1024);
+			strcpy(perms, "-rw-r--r--");
+		}
+
+		status = makeFile(path, perms);
+		send(nmSock1, "SUCCESS", strlen("SUCCESS"), 0);
+		// if (status == 0)
+		// {
+		// 	printf(GRAY_COLOR "Created backup file %s" RESET_COLOR, path);
+		// 	printf(WHITE_COLOR "\n" RESET_COLOR);
+		// }
+	}
+	else if (strcmp(request_command, "BACKUP_MKDIR") == 0)
+	{
+		char *perms = strtok(NULL, " \t\n");
+		if (perms == NULL)
+		{
+			perms = malloc(sizeof(char) * 1024);
+			strcpy(perms, "drwxr-xr-x");
+		}
+		status = makeDirectory(path, perms);
+		send(nmSock1, "SUCCESS", strlen("SUCCESS"), 0);
+		if (status == 0)
+		{
+			printf(GRAY_COLOR "Created backup directory %s" RESET_COLOR, path);
+			printf(WHITE_COLOR "\n" RESET_COLOR);
+		}
+	}
+	else if (strcmp(request_command, "BACKUP_WRITEFILE") == 0)
+	{
+		status = sendFileCopy(path, nmSock1, true);
+		send(nmSock1, "SUCCESS", strlen("SUCCESS"), 0);
+	}
+	else if (strcmp(request_command, "BACKUP_READFILE") == 0)
+	{
+		char *perms = strtok(NULL, " \t\n");
+		if (perms == NULL)
+		{
+			perms = malloc(sizeof(char) * 1024);
+			strcpy(perms, "-rw-r--r--");
+		}
+		status = receiveFileCopy(path, nmSock1, perms, false);
+		send(nmSock1, "SUCCESS", strlen("SUCCESS"), 0);
+		if (status == 0)
+		{
+			printf(GRAY_COLOR "Updated backup file %s" RESET_COLOR, path);
+			printf(WHITE_COLOR "\n" RESET_COLOR);
+		}
+	}
+
 	return NULL;
 }
 
 void *serveNM_Requests(void *args)
 {
 	int nmfd = *((int *)args);
-	// printf("nmfd in ss: %d\n", nmfd);
 	while (1)
 	{
+
 		char buffer[4096];
 		bzero(buffer, 4096);
 		int bytesRecv = recv(nmfd, buffer, sizeof(buffer), 0);
@@ -105,13 +173,20 @@ void *serveNM_Requests(void *args)
 		}
 		if (bytesRecv == 0)
 		{
-			printf(RED_COLOR "[-] Naming Server has disconnected!\n" RESET_COLOR);
+			printf(RED_COLOR "[-] Naming Server has disconnected!" RESET_COLOR);
+			printf(WHITE_COLOR "\n" RESET_COLOR);
+
 			exit(0);
 			break;
 		}
 
-		printf(CYAN_COLOR "Recieved command from NM: %s\n" RESET_COLOR, buffer);
+		if (strncmp(buffer, "BACKUP", 6) != 0)
+		{
+			printf(CYAN_COLOR "Recieved command from NM: %s" RESET_COLOR, buffer);
+			printf(WHITE_COLOR "\n" RESET_COLOR);
+		}
 
+		char *bufferCopy = strdup(buffer);
 		char *request_command = strtok(buffer, " \t\n");
 		char *path = strtok(NULL, " \t\n");
 
@@ -119,14 +194,23 @@ void *serveNM_Requests(void *args)
 		char statusMsg[4096];
 		bzero(statusMsg, sizeof(statusMsg));
 
-		if (strcmp(request_command, "RMFILE") == 0)
+		if (strncmp(request_command, "BACKUP", 6) == 0)
+		{
+			pthread_t backupCommandThread;
+			pthread_create(&backupCommandThread, NULL, handleBackupCommand, (void *)(bufferCopy));
+			pthread_join(backupCommandThread, NULL);
+			continue;
+		}
+		else if (strcmp(request_command, "RMFILE") == 0)
 		{
 			// RMFILE path
 			status = removeFile(path);
 			switch (status)
 			{
 			case 0:
-				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				printf(YELLOW_COLOR "Command successfully executed" RESET_COLOR);
+				printf(WHITE_COLOR "\n" RESET_COLOR);
+
 				strcpy(statusMsg, "SUCCESS");
 				break;
 			case -1:
@@ -147,7 +231,7 @@ void *serveNM_Requests(void *args)
 		}
 		else if (strcmp(request_command, "MKDIR") == 0)
 		{
-			// RMFILE path
+			// MKDIR path
 			char *perms = strtok(NULL, " \t\n");
 			if (perms == NULL)
 			{
@@ -159,7 +243,9 @@ void *serveNM_Requests(void *args)
 			switch (status)
 			{
 			case 0:
-				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				printf(YELLOW_COLOR "Command successfully executed" RESET_COLOR);
+				printf(WHITE_COLOR "\n" RESET_COLOR);
+
 				strcpy(statusMsg, "SUCCESS");
 				break;
 			case -1:
@@ -186,7 +272,9 @@ void *serveNM_Requests(void *args)
 			switch (status)
 			{
 			case 0:
-				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				printf(YELLOW_COLOR "Command successfully executed" RESET_COLOR);
+				printf(WHITE_COLOR "\n" RESET_COLOR);
+
 				strcpy(statusMsg, "SUCCESS");
 				break;
 			case -1:
@@ -219,7 +307,9 @@ void *serveNM_Requests(void *args)
 			switch (status)
 			{
 			case 0:
-				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				printf(YELLOW_COLOR "Command successfully executed" RESET_COLOR);
+				printf(WHITE_COLOR "\n" RESET_COLOR);
+
 				strcpy(statusMsg, "SUCCESS");
 				break;
 			case -1:
@@ -244,7 +334,9 @@ void *serveNM_Requests(void *args)
 			switch (status)
 			{
 			case 0:
-				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				printf(YELLOW_COLOR "Command successfully executed" RESET_COLOR);
+				printf(WHITE_COLOR "\n" RESET_COLOR);
+
 				strcpy(statusMsg, "SUCCESS");
 				break;
 			case -1:
@@ -275,7 +367,9 @@ void *serveNM_Requests(void *args)
 			switch (status)
 			{
 			case 0:
-				printf(YELLOW_COLOR "Command successfully executed\n" RESET_COLOR);
+				printf(YELLOW_COLOR "Command successfully executed" RESET_COLOR);
+				printf(WHITE_COLOR "\n" RESET_COLOR);
+
 				strcpy(statusMsg, "SUCCESS");
 				break;
 			case -1:
@@ -294,6 +388,8 @@ void *serveNM_Requests(void *args)
 				break;
 			}
 		}
+		// backups
+
 		else
 		{
 			continue;
@@ -319,7 +415,8 @@ void *serveClient_Request(void *args)
 	{
 		handleNetworkErrors("recv");
 	}
-	printf(CYAN_COLOR "Recieved command from client: %s\n" RESET_COLOR, buffer);
+	printf(CYAN_COLOR "Recieved command from client: %s" RESET_COLOR, buffer);
+	printf(WHITE_COLOR "\n" RESET_COLOR);
 
 	char *arg_arr[3];
 	parse_input(arg_arr, buffer);
@@ -378,7 +475,8 @@ void *serveClient_Request(void *args)
 		// send the file to client
 		if (!sendFile(arg_arr[1], connfd))
 		{
-			printf(YELLOW_COLOR "Sent the file to client\n" RESET_COLOR);
+			printf(YELLOW_COLOR "Sent the file to client" RESET_COLOR);
+			printf(WHITE_COLOR "\n" RESET_COLOR);
 		}
 		else
 		{
@@ -390,7 +488,8 @@ void *serveClient_Request(void *args)
 		// receive the file from client
 		if (!receiveFile(arg_arr[1], connfd))
 		{
-			printf(YELLOW_COLOR "Received the file from client\n" RESET_COLOR);
+			printf(YELLOW_COLOR "Received the file from client" RESET_COLOR);
+			printf(WHITE_COLOR "\n" RESET_COLOR);
 		}
 		else
 		{
@@ -518,7 +617,8 @@ void *serveClient_Request(void *args)
 				size_t size = dirStat.st_size;
 				// since it is connfd, this sends the file details to client
 				sendPathToNS(arg_arr[1], perms, size, connfd, dirStat.st_mtime, dirStat.st_atime);
-				printf(YELLOW_COLOR "Sent the file details to client\n" RESET_COLOR);
+				printf(YELLOW_COLOR "Sent the file details to client" RESET_COLOR);
+				printf(WHITE_COLOR "\n" RESET_COLOR);
 			}
 		}
 	}

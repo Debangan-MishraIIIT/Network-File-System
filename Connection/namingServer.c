@@ -26,6 +26,7 @@ int nmSock;
 void addToRecords(struct record *r);
 int copyLocally(struct record *curr_rec, char *main_path, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read);
 int backupRemove(struct record *curr_rec, struct ssDetails *ss);
+int backupCopy(struct record *curr_rec, char *main_path, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read);
 
 struct record *getRecord(char *path)
 {
@@ -127,11 +128,11 @@ void addToRecords(struct record *r)
     strcat(backupPath, dirname(strdup(r->path)));
     if (r->originalSS->backup1 != NULL)
     {
-        copyLocally(r, r->path, dirname(strdup(r->path)), backupPath, r->originalSS->backup1, r->originalSS);
+        backupCopy(r, r->path, dirname(strdup(r->path)), backupPath, r->originalSS->backup1, r->originalSS);
     }
     if (r->originalSS->backup1 != NULL)
     {
-        copyLocally(r, r->path, dirname(strdup(r->path)), backupPath, r->originalSS->backup2, r->originalSS);
+        backupCopy(r, r->path, dirname(strdup(r->path)), backupPath, r->originalSS->backup2, r->originalSS);
     }
     return;
 }
@@ -210,11 +211,155 @@ void makeAccessibleAferCopy(struct record *r)
     }
 }
 
+int backupCopy(struct record *curr_rec, char *main_path, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read)
+{
+    if (curr_rec == NULL || strncmp(curr_rec->path, "backups", 7) == 0 || !validSS[ss->id])
+    {
+        return 0;
+    }
+    if (base_dir[strlen(base_dir) - 1] == '.' && base_dir[strlen(base_dir) - 2] == '/')
+    {
+        base_dir[strlen(base_dir) - 2] = '\0';
+    }
+    char *dup = strdup(curr_rec->path);
+    int res1 = 0, res3 = 0;
+
+    char new_request[4096];
+    bzero(new_request, sizeof(new_request));
+    int bytesRecv;
+
+    if (curr_rec->isDir)
+    {
+        removePrefix(dup, mdir);
+        concatenateStrings(new_request, "BACKUP_MKDIR", base_dir, dup, curr_rec->originalPerms);
+
+        res3 = send(ss->connfd, new_request, sizeof(new_request), 0);
+        char ackStatus[4096];
+        bzero(ackStatus, sizeof(ackStatus));
+        bytesRecv = recv(ss->connfd, ackStatus, sizeof(ackStatus), 0);
+
+        // add to record
+        char *arg_arr[3];
+        parse_input(arg_arr, new_request);
+        struct record *r = malloc(sizeof(struct record));
+        r->path = malloc(sizeof(char) * 4096);
+        strcpy(r->path, arg_arr[1]);
+        r->originalSS = ss;
+        strcpy(r->originalPerms, arg_arr[2]);
+        r->isDir = true;
+        strcpy(r->currentPerms, arg_arr[2]);
+        r->size = 0;
+        r->firstChild = NULL;
+        r->nextSibling = NULL;
+        r->parent = NULL;
+        r->prevSibling = NULL;
+        r->isValid = false;
+        pthread_mutex_init(&(r->record_lock), NULL);
+        addToRecords(r);
+
+        printf(GRAY_COLOR "%s backed up in SS%d\n" RESET_COLOR, curr_rec->path, ss->id);
+
+        res1 = backupCopy(curr_rec->firstChild, curr_rec->path, mdir, base_dir, ss, ss_read);
+    }
+    else
+    {
+        removePrefix(dup, mdir);
+        concatenateStrings(new_request, "BACKUP_MKFILE", base_dir, dup, curr_rec->originalPerms);
+
+        res3 = send(ss->connfd, new_request, sizeof(new_request), 0);
+        char ackStatus1[4096];
+        bzero(ackStatus1, sizeof(ackStatus1));
+        bytesRecv = recv(ss->connfd, ackStatus1, sizeof(ackStatus1), 0);
+
+        // add to record
+        char *arg_arr[3];
+        parse_input(arg_arr, new_request);
+        struct record *r = malloc(sizeof(struct record));
+        r->path = malloc(sizeof(char) * 4096);
+        strcpy(r->path, arg_arr[1]);
+        r->originalSS = ss;
+        strcpy(r->originalPerms, arg_arr[2]);
+        r->isDir = false;
+        strcpy(r->currentPerms, arg_arr[2]);
+        r->size = 0;
+        r->firstChild = NULL;
+        r->nextSibling = NULL;
+        r->parent = NULL;
+        r->prevSibling = NULL;
+        r->isValid = false;
+        pthread_mutex_init(&(r->record_lock), NULL);
+        addToRecords(r);
+
+        // send request for downloading file locally
+        char file_buffer[4096];
+        bzero(file_buffer, sizeof(file_buffer));
+
+        bzero(file_buffer, sizeof(file_buffer));
+        strcpy(file_buffer, "BACKUP_WRITEFILE");
+        strcat(file_buffer, " ");
+        strcat(file_buffer, curr_rec->path);
+        // printf("file request: %s\n", file_buffer);
+
+        char recvFileName[1024];
+        strcpy(recvFileName, basename(curr_rec->path));
+        strcpy(recvFileName + strlen(recvFileName), "_copy");
+
+        // receive file
+        int res4 = send(ss_read->connfd, file_buffer, sizeof(file_buffer), 0);                    // error
+        int resp = receiveFileCopy(recvFileName, ss_read->connfd, curr_rec->originalPerms, true); // error
+
+        char ackStatus2[4096];
+        bzero(ackStatus2, sizeof(ackStatus2));
+        bytesRecv = recv(ss_read->connfd, ackStatus2, sizeof(ackStatus2), 0);
+
+        // send request for accepting file in server
+        char file_buffer2[4096];
+        bzero(file_buffer2, sizeof(file_buffer2));
+
+        bzero(file_buffer2, sizeof(file_buffer));
+        strcpy(file_buffer2, "BACKUP_READFILE");
+        strcat(file_buffer2, " ");
+        strcat(file_buffer2, base_dir);
+        strcat(file_buffer2, "/");
+        strcat(file_buffer2, dup);
+        strcat(file_buffer2, " ");
+        strcat(file_buffer2, curr_rec->originalPerms);
+        // printf("file request: %s\n", file_buffer2);
+
+        // send file
+        int res5 = send(ss->connfd, file_buffer2, sizeof(file_buffer2), 0); // error
+        int resp2 = sendFileCopy(recvFileName, ss->connfd, false);          // error
+
+        char ackStatus3[4096];
+        bzero(ackStatus3, sizeof(ackStatus3));
+        bytesRecv = recv(ss->connfd, ackStatus3, sizeof(ackStatus3), 0);
+
+        printf(GRAY_COLOR "%s backed up in SS%d\n" RESET_COLOR, curr_rec->path, ss->id);
+
+        remove(recvFileName);
+    }
+    int res2 = 0;
+    if (strcmp(curr_rec->path, main_path) != 0)
+        res2 = backupCopy(curr_rec->nextSibling, main_path, mdir, base_dir, ss, ss_read);
+    if (res1 == 0 && res2 == 0 && res3 > 0)
+    {
+        return 0;
+    }
+    else
+    {
+        return -1; // error
+    }
+}
+
 int copyLocally(struct record *curr_rec, char *main_path, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read)
 {
     if (curr_rec == NULL || curr_rec->isValid == false)
     {
         return 0;
+    }
+    if (base_dir[strlen(base_dir) - 1] == '.' && base_dir[strlen(base_dir) - 2] == '/')
+    {
+        base_dir[strlen(base_dir) - 2] = '\0';
     }
     char *dup = strdup(curr_rec->path);
     int res1 = 0, res3 = 0;
@@ -350,7 +495,6 @@ int backupRemove(struct record *curr_rec, struct ssDetails *ss)
     }
     char new_request[4096];
     bzero(new_request, sizeof(new_request));
-    int bytesRecv;
     char ackStatus[4096];
 
     if (curr_rec->isDir)
@@ -358,21 +502,28 @@ int backupRemove(struct record *curr_rec, struct ssDetails *ss)
         strcat(new_request, "RMDIR ");
         strcat(new_request, "backups/");
         strcat(new_request, curr_rec->path);
-        send(ss->backup1->connfd, new_request, sizeof(new_request), 0);
-        recv(ss->backup1->connfd, ackStatus, sizeof(ackStatus), 0);
-        send(ss->backup2->connfd, new_request, sizeof(new_request), 0);
-        recv(ss->backup2->connfd, ackStatus, sizeof(ackStatus), 0);
     }
     else
     {
         strcat(new_request, "RMFILE ");
         strcat(new_request, "backups/");
         strcat(new_request, curr_rec->path);
+    }
+
+    if (ss->backup1 != NULL && validSS[ss->backup1->id])
+    {
         send(ss->backup1->connfd, new_request, sizeof(new_request), 0);
         recv(ss->backup1->connfd, ackStatus, sizeof(ackStatus), 0);
+        printf(GRAY_COLOR "Removed %s from backups in SS%d\n" RESET_COLOR, curr_rec->path, ss->backup1->id);
+    }
+    if (ss->backup1 != NULL && validSS[ss->backup2->id])
+    {
         send(ss->backup2->connfd, new_request, sizeof(new_request), 0);
         recv(ss->backup2->connfd, ackStatus, sizeof(ackStatus), 0);
+        printf(GRAY_COLOR "Removed %s from backups in SS%d\n" RESET_COLOR, curr_rec->path, ss->backup1->id);
     }
+
+    return 0;
 }
 
 void logMessage(const char *message, const char *ip, int port)
@@ -415,6 +566,7 @@ void *acceptClientRequests(void *args)
             close(cli->connfd);
             break;
         }
+        logMessage("Recieved request from client", cli->ip, cli->port);
 
         printf(YELLOW_COLOR "Comamnd from client %d: \'%s\'\n" RESET_COLOR, cli->id, request);
 
@@ -435,6 +587,7 @@ void *acceptClientRequests(void *args)
                 {
                     handleNetworkErrors("send");
                 }
+                logMessage("Sent ACK to client", cli->ip, cli->port);
                 continue;
             }
             // check if ss stored in record is down or not and subsequently, send a packet to client
@@ -447,6 +600,7 @@ void *acceptClientRequests(void *args)
                 {
                     handleNetworkErrors("send");
                 }
+                logMessage("Sent ACK to client", cli->ip, cli->port);
                 continue;
             }
 
@@ -459,6 +613,7 @@ void *acceptClientRequests(void *args)
             {
                 handleNetworkErrors("send");
             }
+            logMessage("Sent request to SS", ss->ip, ss->nmPort);
 
             // receiving ack status from ss
             char ackStatus[4096];
@@ -470,6 +625,7 @@ void *acceptClientRequests(void *args)
             {
                 handleNetworkErrors("recv");
             }
+            logMessage("Received ACK from SS", ss->ip, ss->nmPort);
 
             if (strcmp(ackStatus, "SUCCESS") == 0)
             {
@@ -487,6 +643,7 @@ void *acceptClientRequests(void *args)
             {
                 handleNetworkErrors("send");
             }
+            logMessage("Sent ACK to client", cli->ip, cli->port);
 
             continue;
         }
@@ -512,6 +669,7 @@ void *acceptClientRequests(void *args)
                 {
                     handleNetworkErrors("send");
                 }
+                logMessage("Sent ACK to client", cli->ip, cli->port);
                 continue;
             }
 
@@ -527,6 +685,7 @@ void *acceptClientRequests(void *args)
                 {
                     handleNetworkErrors("send");
                 }
+                logMessage("Sent ACK to client", cli->ip, cli->port);
                 continue;
             }
             // check if ss stored in record is down or not and subsequently, send a packet to client
@@ -539,6 +698,7 @@ void *acceptClientRequests(void *args)
                 {
                     handleNetworkErrors("send");
                 }
+                logMessage("Sent ACK to client", cli->ip, cli->port);
                 continue;
             }
 
@@ -551,12 +711,14 @@ void *acceptClientRequests(void *args)
             {
                 handleNetworkErrors("send");
             }
+            logMessage("Sent request to SS", ss->ip, ss->nmPort);
 
             // receiving ack status from ss
             char ackStatus[4096];
             bzero(ackStatus, sizeof(ackStatus));
             bytesRecv = recv(ss->connfd, ackStatus, sizeof(ackStatus), 0);
             pthread_mutex_unlock(&r->record_lock);
+            logMessage("Received ACK from SS", ss->ip, ss->nmPort);
 
             if (bytesRecv == -1)
             {
@@ -607,6 +769,7 @@ void *acceptClientRequests(void *args)
             {
                 handleNetworkErrors("send");
             }
+            logMessage("Sent ACK to client", cli->ip, cli->port);
 
             continue;
         }
@@ -624,6 +787,7 @@ void *acceptClientRequests(void *args)
                 {
                     handleNetworkErrors("send");
                 }
+                logMessage("Sent ACK to client", cli->ip, cli->port);
                 continue;
             }
             if (!validSS[r1->originalSS->id] || !validSS[r2->originalSS->id])
@@ -635,6 +799,7 @@ void *acceptClientRequests(void *args)
                 {
                     handleNetworkErrors("send");
                 }
+                logMessage("Sent ACK to client", cli->ip, cli->port);
                 continue;
             }
             else if (r2->isDir == 0)
@@ -645,6 +810,7 @@ void *acceptClientRequests(void *args)
                 {
                     handleNetworkErrors("send");
                 }
+                logMessage("Sent ACK to client", cli->ip, cli->port);
                 continue;
             }
 
@@ -663,6 +829,7 @@ void *acceptClientRequests(void *args)
             }
             else
             {
+                handleFileOperationError("copy_failed");
                 strcpy(ackStatus, "ERROR");
             }
 
@@ -671,6 +838,8 @@ void *acceptClientRequests(void *args)
             {
                 handleNetworkErrors("send");
             }
+            logMessage("Sent ACK to client", cli->ip, cli->port);
+
             continue;
         }
 
@@ -728,7 +897,7 @@ void *acceptClientRequests(void *args)
                     error = true;
                 }
             }
-            if (ss != NULL && ss != r->originalSS)
+            if (!error && ss != NULL && ss != r->originalSS)
             {
                 ss->inBackup = true;
             }
@@ -744,6 +913,7 @@ void *acceptClientRequests(void *args)
                 if (strcmp(arg_arr[0], "WRITE") == 0 && !error)
                     pthread_mutex_unlock(&r->record_lock);
             }
+            logMessage("Sent SS details", cli->ip, cli->port);
             if (!error)
             {
                 printf(YELLOW_COLOR "Storage Server details sent to client\n" RESET_COLOR);
@@ -751,27 +921,32 @@ void *acceptClientRequests(void *args)
             // // add code for acknowledgment from the client
             if (strcmp(arg_arr[0], "WRITE") == 0)
             {
-                char ackBUFFER[10];
+                char ackBUFFER[100];
                 bytesRecv = recv(cli->connfd, ackBUFFER, sizeof(ackBUFFER), 0);
                 if (bytesRecv == -1)
                 {
                     handleNetworkErrors("recv");
                     if (!error)
                         pthread_mutex_unlock(&r->record_lock);
-                    // break;
+                    break;
                 }
+                logMessage("Recieved ACK from client", cli->ip, cli->port);
+
                 if (strcmp(ackBUFFER, "done") == 0)
                 {
                     if (!error)
                         pthread_mutex_unlock(&r->record_lock);
                 }
-                char backupPath[4096];
-                strcpy(backupPath, "backups/");
-                strcat(backupPath, dirname(strdup(r->path)));
-                if (r->originalSS->backup1 != NULL)
-                    copyLocally(r, r->path, dirname(strdup(r->path)), backupPath, r->originalSS->backup1, r->originalSS);
-                if (r->originalSS->backup2 != NULL)
-                    copyLocally(r, r->path, dirname(strdup(r->path)), backupPath, r->originalSS->backup2, r->originalSS);
+                if (ss->id > 0)
+                {
+                    char backupPath[4096];
+                    strcpy(backupPath, "backups/");
+                    strcat(backupPath, dirname(strdup(r->path)));
+                    if (r->originalSS->backup1 != NULL)
+                        backupCopy(r, r->path, dirname(strdup(r->path)), backupPath, r->originalSS->backup1, r->originalSS);
+                    if (r->originalSS->backup2 != NULL)
+                        backupCopy(r, r->path, dirname(strdup(r->path)), backupPath, r->originalSS->backup2, r->originalSS);
+                }
             }
         }
     }
@@ -801,7 +976,7 @@ void *addPaths(void *args)
             printf(RED_COLOR "[-] Storage Server %d has disconnected!\n" RESET_COLOR, ss->id);
             break;
         }
-        char logMsg[100] = "Recieved: Path - ";
+        char logMsg[100] = "Recieved: Path to add - ";
         strcpy(logMsg + strlen(logMsg), det.path);
         logMessage(logMsg, ss->ip, ss->nmPort);
 
@@ -812,7 +987,7 @@ void *addPaths(void *args)
             {
                 handleNetworkErrors("send");
             }
-            logMessage("Sent: EXISTS", ss->ip, ss->nmPort);
+            logMessage("Sent ACK - EXISTS", ss->ip, ss->nmPort);
 
             continue;
         }
@@ -846,7 +1021,7 @@ void *addPaths(void *args)
         {
             handleNetworkErrors("send");
         }
-        logMessage("Sent: ADDED", ss->ip, ss->nmPort);
+        logMessage("Sent ACK - ADDED", ss->ip, ss->nmPort);
     }
 
     return NULL;
@@ -877,7 +1052,7 @@ void createBackup(struct ssDetails *src, struct ssDetails *dest)
     {
         if (child->originalSS == src && child->isValid)
         {
-            copyLocally(child, child->path, dirname(strdup(child->path)), "backups", dest, src);
+            backupCopy(child, child->path, dirname(strdup(child->path)), "backups", dest, src);
         }
         child = child->nextSibling;
     }
@@ -972,13 +1147,11 @@ void addStorageServer(int connfd, char *hostIP, int hostPort)
                         {
                             b1 = j;
                             storageServers[i].backup1 = &storageServers[b1];
-                            createBackup(&storageServers[i], &storageServers[b1]);
                         }
                         else if (storageServers[i].backup2 == NULL)
                         {
                             b2 = j;
                             storageServers[i].backup2 = &storageServers[b2];
-                            createBackup(&storageServers[i], &storageServers[b2]);
                         }
                         else
                         {
@@ -987,6 +1160,8 @@ void addStorageServer(int connfd, char *hostIP, int hostPort)
                     }
                 }
                 printf(BLUE_COLOR "Backup servers for SS%d are SS%d and SS%d\n" RESET_COLOR, i, b1, b2);
+                createBackup(&storageServers[i], &storageServers[b1]);
+                createBackup(&storageServers[i], &storageServers[b2]);
             }
         }
     }
@@ -1038,7 +1213,7 @@ void *acceptHost(void *args)
             handleNetworkErrors("send");
             // perror("send");
         }
-        logMessage("Sent: ACCEPTED JOIN", ip, ntohs(cli.sin_port));
+        logMessage("Sent ACK - ACCEPTED JOIN", ip, ntohs(cli.sin_port));
 
         if (strcmp(buffer, "JOIN_AS Storage Server") == 0)
         {

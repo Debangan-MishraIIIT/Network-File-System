@@ -153,7 +153,7 @@ int sendRequest(char *input, int sockfd)
 		// recieve the ss details
 		struct ssDetails ss;
 		int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
-		if ((ss.id == 0) || bytesRecv == 0 || (bytesRecv == -1 && errno == ECONNRESET))
+		if ((ss.id == 0) || bytesRecv == 0 || bytesRecv == -1)
 		{
 			// nm has disconnected
 			return -1;
@@ -399,7 +399,7 @@ int sendRequest(char *input, int sockfd)
 		// recieve the ss details
 		struct ssDetails ss;
 		int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
-		if ((ss.id == 0) || bytesRecv == 0 || (bytesRecv == -1 && errno == ECONNRESET))
+		if ((ss.id == 0) || bytesRecv == 0 || bytesRecv == -1)
 		{
 			// nm has disconnected
 			return -1;
@@ -557,7 +557,7 @@ int sendRequest(char *input, int sockfd)
 		// recieve the ss details
 		struct ssDetails ss;
 		int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
-		if ((ss.id == 0) || bytesRecv == 0 || (bytesRecv == -1 && errno == ECONNRESET))
+		if ((ss.id == 0) || bytesRecv == 0 || bytesRecv == -1)
 		{
 			// nm has disconnected
 			return -1;
