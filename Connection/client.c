@@ -46,6 +46,28 @@ int sendRequest(char *input, int sockfd)
 			return -1;
 		}
 
+		// check for timout
+		struct timeval timeout;
+		timeout.tv_sec = 3; 
+		timeout.tv_usec = 0;
+
+		fd_set readfds;
+		FD_ZERO(&readfds);
+		FD_SET(sockfd, &readfds);
+
+		bool isTimeout = false;
+		int selectResult = select(sockfd + 1, &readfds, NULL, NULL, &timeout);
+		if (selectResult == -1)
+		{
+			handleSYSErrors("select");
+		}
+		else if (selectResult == 0)
+		{
+			// Timeout occurred
+			handleNetworkErrors("timeout");
+			isTimeout = true;
+		}
+
 		// recieve ack
 		char ackMsg[4096];
 		bzero(ackMsg, sizeof(ackMsg));
@@ -53,6 +75,10 @@ int sendRequest(char *input, int sockfd)
 		if (bytesRecv == -1)
 		{
 			handleNetworkErrors("recv");
+		}
+		if (isTimeout)
+		{
+			return -2;
 		}
 
 		// only for output formatting
@@ -151,6 +177,30 @@ int sendRequest(char *input, int sockfd)
 		}
 
 		// recieve the ss details
+
+		// check if currently something else is writing, give warning and wait
+		// check for timout
+		struct timeval timeout;
+		timeout.tv_sec = 2; 
+		timeout.tv_usec = 0;
+
+		fd_set readfds;
+		FD_ZERO(&readfds);
+		FD_SET(sockfd, &readfds);
+
+		int selectResult = select(sockfd + 1, &readfds, NULL, NULL, &timeout);
+		if (selectResult == -1)
+		{
+			handleSYSErrors("select");
+		}
+		else if (selectResult == 0)
+		{
+			// Timeout occurred
+			handleFileOperationError("write_open");
+			printf(YELLOW_COLOR"Waiting for other client to finish write\n"RESET_COLOR);
+		}
+
+		
 		struct ssDetails ss;
 		int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
 		if ((ss.id == 0) || bytesRecv == 0 || bytesRecv == -1)
@@ -231,6 +281,7 @@ int sendRequest(char *input, int sockfd)
 			}
 			return -2;
 		}
+
 		// printf("\'%s\' sent to SS %s:%d\n", input, ss.ip, ss.cliPort);
 
 		// receive the perms first

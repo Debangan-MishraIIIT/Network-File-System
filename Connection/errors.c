@@ -80,6 +80,9 @@ void handleFileOperationError(char *error)
     
     if (!strcmp(error, "copy_failed"))
         printf(RED "ERROR 514: COULD NOT COPY (copy)\n" reset);
+    
+    if (!strcmp(error, "write_open"))
+        printf(RED "ERROR 515: FILE IS CURRENTLY OPEN IN WRITE MODE (write)\n" reset);
 }
 
 // syscall and input errors (all in blue)
@@ -120,6 +123,9 @@ void handleSYSErrors(char *error)
 
     if (!strcmp(error, "execvp"))
         printf(LIGHT_RED_COLOR "ERROR 611: COULD NOT EXECUTE COMMAND (execvp)\n" reset);
+    
+    if (!strcmp(error, "select"))
+        printf(LIGHT_RED_COLOR "ERROR 612: SELECT failed (select)\n" reset);
 }
 
 // network errors (all in magenta)
@@ -146,4 +152,7 @@ void handleNetworkErrors(char *error)
 
     if (!strcmp(error, "send"))
         printf(RED "ERROR 907: FAILED TO SEND TO SOCKET (send)\n" reset);
+    
+    if (!strcmp(error, "timeout"))
+        printf(RED "ERROR 908: COMMAND TIMED OUT (timeout)\n" reset);
 }
