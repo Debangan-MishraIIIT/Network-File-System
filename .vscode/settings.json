@@ -1,9 +1,0 @@
-{
-    "files.associations": {
-        "*.html": "html",
-        "stat.h": "c",
-        "types.h": "c",
-        "headers.h": "c",
-        "tuple": "c"
-    }
-}

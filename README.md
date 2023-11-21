@@ -1,3 +1,17 @@
+## Usage
+1. To build Naming Server 
+```
+./build.sh namingServer
+```
+2. To build Storage Server 1 (in `StorageServers/storageServer1`)
+```
+./build.sh storageServer1
+```
+3. To build Client 1 (in `Clients/client1`)
+```
+./build.sh client1
+```
+
 ## Naming Server
 
 1. The naming server is initialized in `initializeNamingServer()` where a new socket is created and binded to a fixed port.

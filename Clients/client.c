@@ -48,7 +48,7 @@ int sendRequest(char *input, int sockfd)
 
 		// check for timout
 		struct timeval timeout;
-		timeout.tv_sec = 3; 
+		timeout.tv_sec = 3;
 		timeout.tv_usec = 0;
 
 		fd_set readfds;
@@ -181,7 +181,7 @@ int sendRequest(char *input, int sockfd)
 		// check if currently something else is writing, give warning and wait
 		// check for timout
 		struct timeval timeout;
-		timeout.tv_sec = 2; 
+		timeout.tv_sec = 2;
 		timeout.tv_usec = 0;
 
 		fd_set readfds;
@@ -197,10 +197,9 @@ int sendRequest(char *input, int sockfd)
 		{
 			// Timeout occurred
 			handleFileOperationError("write_open");
-			printf(YELLOW_COLOR"Waiting for other client to finish write\n"RESET_COLOR);
+			printf(YELLOW_COLOR "Waiting for other client to finish write\n" RESET_COLOR);
 		}
 
-		
 		struct ssDetails ss;
 		int bytesRecv = recv(sockfd, &ss, sizeof(ss), 0);
 		if ((ss.id == 0) || bytesRecv == 0 || bytesRecv == -1)
@@ -677,7 +676,7 @@ int sendRequest(char *input, int sockfd)
 		printf(CYAN_COLOR "File Name: %s\n", det.fileName);
 		printf("File path: %s\n", det.path);
 		printf("File permissions: %s\n", det.perms);
-		printf("File size: %d\n", det.size);
+		printf("File size: %lu\n", det.size);
 		printf("File last modified time: %s", ctime(&det.lastModifiedTime));
 		printf("File last access time: %s\n" CYAN_COLOR, ctime(&det.lastAccessTime));
 		return 0;
@@ -701,10 +700,14 @@ int sendRequest(char *input, int sockfd)
 		printf("6. RMDIR <pathToDirectory> ====> Remove a directory \n");
 		printf("7. RMFILE <pathToFile> ====> Remove a file \n");
 		printf("8. COPY <sourcePath> <destinationPathToDirectory> ====> Copy a directory or a file to another directory \n");
-		printf("9. HELP ====> Print list of commands\n" reset);
+		printf("9. HELP ====> Print list of commands\n");
+		printf("10. EXIT ====> Exit the NFS\n" reset);
 		return 0;
 	}
-
+	else if ((strcasecmp(request_command, "EXIT") == 0))
+	{
+		exit(0);
+	}
 	else
 	{
 		printf(RED_COLOR "Invalid Input!\n" RESET_COLOR);
