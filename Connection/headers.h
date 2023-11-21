@@ -23,29 +23,10 @@
 #include <time.h>
 #include <sys/ioctl.h>
 
-#include "socket.h"
-#include "api.h"
-#include "search.h"
-#include "cache.h"
-#include "colors.h"
-#include "errors.h"
 
 #define SA struct sockaddr
 #define MAX_SIZE 1024
 #define maxlen 1000
-void handle_errors(char *error);
-
-struct pair
-{
-    int first, second;
-};
-
-struct hostDetails
-{
-    char ip[16];
-    int port;
-    int connfd;
-};
 
 struct cDetails
 {
@@ -68,12 +49,6 @@ struct ssDetails
     struct ssDetails *backup2;
 };
 
-struct accessibleFile
-{
-    char *path;
-    char perms[11];
-};
-
 struct record
 {
     char *path;
@@ -81,8 +56,6 @@ struct record
     char originalPerms[11];
     bool isDir;
     char currentPerms[11]; // for backup
-    // struct ssDetails *backupSS1;
-    // struct ssDetails *backupSS2;
     size_t size;
 
     // for n-ary tree
@@ -105,4 +78,15 @@ struct fileDetails
     time_t lastAccessTime;
     time_t lastModifiedTime;
 };
+
+#include "api.h"
+#include "cache.h"
+#include "client.h"
+#include "colors.h"
+#include "errors.h"
+#include "namingServer.h"
+#include "search.h"
+#include "storageServer.h"
+
+
 #endif

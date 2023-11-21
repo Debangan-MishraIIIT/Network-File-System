@@ -1,32 +1,21 @@
-#include "headers.h"
+#include "../Connection/headers.h"
 
+// global variables
 struct ssDetails storageServers[10000];
 bool validSS[10000];
 int storageServerCount = 0;
 int activeStorageServers = 0;
-
 struct cDetails clientDetails[10000];
 bool validCli[10000];
-
-// struct record records[10000];
-// int recordCount = 0;
 struct record *root;
-
 pthread_t clientThreads[10000];
 int clientCount = 0;
 TrieNode *trieRoot;
 LRUCache *myCache;
-
 pthread_mutex_t hostLock;
 pthread_mutex_t recordsLock;
 pthread_mutex_t loggingLock;
-
 int nmSock;
-
-void addToRecords(struct record *r);
-int copyLocally(struct record *curr_rec, char *main_path, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read);
-int backupRemove(struct record *curr_rec, struct ssDetails *ss);
-int backupCopy(struct record *curr_rec, char *main_path, char *mdir, char *base_dir, struct ssDetails *ss, struct ssDetails *ss_read);
 
 struct record *getRecord(char *path)
 {
@@ -164,32 +153,6 @@ void removeFromRecords(char *path)
     free(r->path);
     free(r);
     pthread_mutex_unlock(&recordsLock);
-}
-
-void removePrefix(char *str, const char *prefix)
-{
-    size_t prefixLen = strlen(prefix);
-    size_t strLen = strlen(str);
-
-    if (strLen >= prefixLen && strncmp(str, prefix, prefixLen) == 0)
-    {
-        memmove(str, str + prefixLen, strLen - prefixLen + 1); // +1 to include the null terminator
-        if (str[0] == '/')
-        {
-            memmove(str, str + 1, strLen - prefixLen); // Remove the leading '/'
-        }
-    }
-}
-
-void concatenateStrings(char *result, const char *A, const char *B, const char *C, const char *D)
-{
-    strcpy(result, A);
-    strcat(result, " ");
-    strcat(result, B);
-    strcat(result, "/");
-    strcat(result, C);
-    strcat(result, " ");
-    strcat(result, D);
 }
 
 void makeAccessibleAferCopy(struct record *r)

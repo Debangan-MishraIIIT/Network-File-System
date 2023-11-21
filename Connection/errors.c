@@ -1,30 +1,5 @@
 #include "headers.h"
 
-/*
-
-// file error ===> starting with 5 (500,501,502,503....) ------------> RED
-// 		1. File missing =
-// 		2. No read Perms =
-// 		3. No write Perms =
-// 		4. convertPerms =
-// 		5. mkdir , mkfile , etc errors =
-
-// network error ===> starting with 9 (900,901,902,903...) -----------> YELLOW
-// 		1. Receive Error =
-// 		2. Send Error =
-// 		3. Individual Error codes for helper functions like sendPathToNS , check_path_exists , etc
-// 		4.
-
-// syscall errors ===> starting with 6(600,601,602,603...) -----------> BLUE
-// 		1. malloc =
-// 		2. input errors =
-
-*/
-void handle_errors(char *error)
-{
-    printf("handle_errors - %s\n", error);
-}
-
 void handleAllErrors(char *error)
 {
     handleFileOperationError(error);
@@ -33,7 +8,6 @@ void handleAllErrors(char *error)
 }
 
 // file operations errors (all in red)
-
 void handleFileOperationError(char *error)
 {
     if (!strcmp(error, "file_not_found"))
@@ -85,7 +59,7 @@ void handleFileOperationError(char *error)
         printf(RED "ERROR 515: FILE IS CURRENTLY OPEN IN WRITE MODE (write)\n" reset);
 }
 
-// syscall and input errors (all in blue)
+// syscall errors (all in light red)
 void handleSYSErrors(char *error)
 {
     if (!strcmp(error, "malloc"))
@@ -128,8 +102,7 @@ void handleSYSErrors(char *error)
         printf(LIGHT_RED_COLOR "ERROR 612: SELECT failed (select)\n" reset);
 }
 
-// network errors (all in magenta)
-
+// network errors (all in red)
 void handleNetworkErrors(char *error)
 {
     if (!strcmp(error, "socket"))

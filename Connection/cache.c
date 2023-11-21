@@ -35,11 +35,9 @@ void addFile(LRUCache *myCache, struct record *newTableEntry)
         myCache->numFiles--;
     }
 
-    // Move existing files to make space for the new file
     for (int i = myCache->numFiles; i > 0; --i)
         myCache->cacheArray[i] = myCache->cacheArray[i - 1];
 
-    // Add the new file at the beginning
     myCache->cacheArray[0].tableEntry = newTableEntry;
     myCache->numFiles++;
 }
@@ -51,7 +49,6 @@ struct record *searchFileInCache(LRUCache *myCache, char *filePath)
         if (strcmp(myCache->cacheArray[i].tableEntry->path, filePath) == 0)
         {
             moveCellToStart(myCache, i);
-            // printf("Found the entry in cache\n");
             return myCache->cacheArray[0].tableEntry;
         }
     }
@@ -64,7 +61,6 @@ int removeFileFromCache(LRUCache *myCache, char *filePath)
     {
         if (strcmp(myCache->cacheArray[i].tableEntry->path, filePath) == 0)
         {
-            // Shift elements to the left to fill the gap
             for (int j = i; j < myCache->numFiles - 1; ++j)
             {
                 myCache->cacheArray[j] = myCache->cacheArray[j + 1];
